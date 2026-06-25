@@ -1,0 +1,18 @@
+# Build outputs
+modules/
+logs/
+
+# Downloaded external components
+firmware/
+build/src/
+
+# Compressed archives
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.zip
+
+# Docker / build cache
+*.bak
+*.log
+.env.local
