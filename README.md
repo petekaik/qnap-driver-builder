@@ -147,6 +147,72 @@ Inside the container you should see `/dev/dvb/adapter0` and `/dev/dvb/adapter1`.
 
 Edit `2_build_dvb.sh` and add the module paths to `MODULES_LIST`, then rebuild. You may also need to add the relevant `CONFIG_*` entries in `apply_patches.py` if they are not already enabled.
 
+## Persisting modules across reboots
+
+QNAP does **not** automatically reload custom kernel modules after a reboot. The fastest way to make the DVB setup survive reboots is to run a short shell script from QNAP's scheduled task / cron at startup.
+
+1. Create `/path/to/qnap-driver-builder/scripts/load-dvb.sh`:
+
+   ```bash
+   #!/bin/sh
+   # Load custom DVB modules on QNAP boot
+   MODDIR="/lib/modules/$(uname -r)/extra"
+   for mod in tveeprom tuner si2157 si2168 em28xx em28xx_dvb dvb_usb; do
+       [ -f "$MODDIR/$mod.ko" ] && insmod "$MODDIR/$mod.ko" 2>/dev/null || true
+   done
+   ```
+
+2. Make it executable:
+
+   ```bash
+   chmod +x /path/to/qnap-driver-builder/scripts/load-dvb.sh
+   ```
+
+3. Add it to QNAP startup cron (`/etc/config/crontab`). In QTS Control Panel → System → Hardware → General, use **Schedule** → **Create** → **Trigger event** → **Startup**, or edit the crontab directly:
+
+   ```bash
+   @reboot root /path/to/qnap-driver-builder/scripts/load-dvb.sh >> /path/to/qnap-driver-builder/logs/dvb-boot.log 2>&1
+   ```
+
+   Then restart cron:
+
+   ```bash
+   /etc/init.d/crond.sh restart
+   ```
+
+4. Verify after next reboot:
+
+   ```bash
+   lsmod | grep em28xx
+   ls /dev/dvb
+   dmesg | tail -20 | grep -E 'em28xx|si2168|si2157'
+   ```
+
+## Persisting firmware across QTS / firmware updates
+
+QNAP firmware updates can overwrite `/lib/firmware/` and `/lib/modules/`. Keep a copy of your firmware files and rebuild modules after a major QTS update:
+
+```bash
+# Keep firmware backup in the project directory
+cp /lib/firmware/dvb-demod-si2168-*.fw /path/to/qnap-driver-builder/firmware/
+
+# After a QTS update, re-run the builder and reinstall modules
+# (kernel version may have changed, so the old .ko files may not load)
+cd /path/to/qnap-driver-builder/build
+docker run --rm --user root \
+  -v /path/to/qnap-driver-builder/build/src:/build/src \
+  -v /path/to/qnap-driver-builder/modules:/modules-out:rw \
+  -v /path/to/qnap-driver-builder/logs:/build/logs:rw \
+  qnap-dvb-builder
+
+# Reinstall
+cp /path/to/qnap-driver-builder/modules/*.ko /lib/modules/$(uname -r)/extra/
+depmod -a $(uname -r)
+cp /path/to/qnap-driver-builder/firmware/*.fw /lib/firmware/
+```
+
+If the kernel version changes, the modules built for the old kernel will not load (`Invalid module format`). The builder fetches the GPL source matching `QNAP_VER` in `.env`, so update that value to your new QTS version before rebuilding.
+
 ## Troubleshooting
 
 ### `firmware file 'dvb-demod-si2168-02.fw' not found`
@@ -160,6 +226,9 @@ The Si2168 demodulator needs firmware. Copy the requested file to `/lib/firmware
 
 ### Build fails with `Module.symvers` errors
 This happens when a module depends on symbols from another module that was not built first. Re-run the builder; the script now builds dependency subtrees (`drivers/media/common`, `drivers/media/tuners`, `drivers/media/dvb-frontends`) before the top-level em28xx modules and merges `Module.symvers` between stages.
+
+### Modules do not load after reboot
+Check the boot log (`/path/to/qnap-driver-builder/logs/dvb-boot.log`) and confirm the startup cron entry is present. If QTS removed `/lib/modules/$(uname -r)/extra`, recreate it and reinstall the modules.
 
 ## License
 
