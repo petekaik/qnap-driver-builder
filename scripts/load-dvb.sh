@@ -12,11 +12,22 @@ exec 1>"$LOG_FILE" 2>&1
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting DVB module load (project: $PROJECT_DIR)"
 
+# QTS wipes /lib/modules/<kernel>/extra on reboot, so reinstall compiled modules.
+if [ -d "${PROJECT_DIR}/modules" ]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Installing modules to ${MODULE_DIR}"
+    mkdir -p "${MODULE_DIR}"
+    cp -f "${PROJECT_DIR}/modules/"*.ko "${MODULE_DIR}/"
+    depmod -a "$(uname -r)"
+else
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: compiled module backup not found at ${PROJECT_DIR}/modules"
+    exit 1
+fi
+
 # Ensure firmware is installed in /lib/firmware (QTS updates may wipe it)
 for fw in dvb-demod-si2168-b40-01.fw dvb-demod-si2168-d60-01.fw dvb-demod-si2168-02.fw; do
     if [ -f "${PROJECT_DIR}/firmware/$fw" ]; then
         if [ ! -e "/lib/firmware/$fw" ] || [ "${PROJECT_DIR}/firmware/$fw" -nt "/lib/firmware/$fw" ]; then
-            cp "${PROJECT_DIR}/firmware/$fw" /lib/firmware/$fw
+            cp -f "${PROJECT_DIR}/firmware/$fw" /lib/firmware/$fw
             echo "[$(date '+%Y-%m-%d %H:%M:%S')] Installed / refreshed firmware: $fw"
         fi
     fi
