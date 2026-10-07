@@ -1,14 +1,11 @@
 #!/usr/bin/env bash
-# Build environment helpers for QNAP DVB module build
-# Simplified: no pushd/popd, just cd pairs
 
+##################################################
+# Check if the build environment is already loaded
+##################################################
 if [ "$BUILD_ENV_LOADED" = "true" ]; then
     return 0
 fi
-
-# Disable bash builtins that may conflict
-enable -n pushd 2>/dev/null || true
-enable -n popd 2>/dev/null || true
 
 set -e
 
@@ -18,38 +15,29 @@ if [ ! -f ".env" ]; then
 fi
 . .env
 
-_BUILD_OLD_DIR=""
-
 function _enter() {
-    _BUILD_OLD_DIR="$(pwd)"
-    cd "$BASE_DIR" || return 1
+    pushd "$BASE_DIR"
     export BUILD_ENV_ENTERED="true"
 }
 
 function _leave() {
-    rm -rf "${TMP_DIR:-}" 2>/dev/null || true
+    rm -rf "$TMP_DIR"
     if [ "$BUILD_ENV_ENTERED" = "true" ]; then
-        cd "$_BUILD_OLD_DIR" || true
+        popd
         unset BUILD_ENV_ENTERED
     fi
 }
 
 function _build() {
     _enter
-    if declare -f -F "build" > /dev/null; then
-        build
-    fi
-    if declare -f -F "collect_artifacts" > /dev/null; then
-        collect_artifacts
-    fi
+    declare -f -F "build" > /dev/null && build
+    declare -f -F "collect_artifacts" > /dev/null && collect_artifacts
     _leave
 }
 
 function _clean() {
     _enter
-    if declare -f -F "clean" > /dev/null; then
-        clean
-    fi
+    declare -f -F "clean" > /dev/null && clean
     _leave
 }
 
@@ -65,8 +53,15 @@ function apply_patches() {
     done
 }
 
+function pushd() {
+    command pushd "$@" > /dev/null
+}
+function popd() {
+    command popd "$@" > /dev/null
+}
+
 function entry_point() {
-    case "${1:-build}" in
+    case "$1" in
         "build")
             _build
             ;;

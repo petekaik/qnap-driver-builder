@@ -1,0 +1,7 @@
+# Keep build state and downloaded archives out of the image.
+# NOTE: .env must NOT be excluded — the container sources it to find /build paths.
+src/
+logs/
+modules/
+*.tar.gz
+*.tar.bz2

@@ -1,26 +1,28 @@
 #!/usr/bin/env bash
-set -e
+set -eo pipefail
 
 . build_env.sh
+
+# Filename the GPL kernel archive is downloaded to, inside $SRC_DIR.
+# Must be set here: it is used by the download branch below.
 QNAP_ARCHIVE="GPL_QTS-${QNAP_VER}_Kernel.tar.gz"
 
-# Apply patches that enable DVB/USB-media support in kernel config
-# These use scripts/config which modifies .config without re-running menuconfig
+# Turn on the DVB / USB-media CONFIG_* entries the modules need.
+#
+# apply_patches.py takes the config path as an absolute argument, so it does
+# not care about the caller's cwd. The previous inline `scripts/config` version
+# invoked a relative path from $SRC_DIR, so it always failed and fell through to
+# a two-config sed that set them =m where =y is required (see CLAUDE.md).
 apply_config_patches() {
     local cfg="$KERNEL_DIR/.config"
 
     echo "==> Applying .config patches to enable DVB/USB-media modules..."
-
-    if [ -f /build/apply_patches.py ]; then
-        python3 /build/apply_patches.py "$cfg"
-    else
-        echo "WARN: apply_patches.py not found, skipping"
-    fi
+    python3 "$BASE_DIR/apply_patches.py" "$cfg"
 }
 
 
 function build() {
-    cd "$SRC_DIR"
+    pushd "$SRC_DIR"
 
     if [[ ! -d "$QNAP_DIR" ]]; then
         echo "==> Downloading QNAP GPL kernel source..."
@@ -68,44 +70,77 @@ function build() {
     apply_config_patches
 
     echo "==> Preparing kernel build environment..."
-    cd "$KERNEL_DIR"
+    pushd "$KERNEL_DIR"
 
     # Build dependencies and version files
     make ARCH=x86_64 prepare 2>&1 | tail -5
     make ARCH=x86_64 modules_prepare 2>&1 | tail -5
 
-    # Get list of Media/USB/DVB modules to compile
+    # Modules the boot loader (scripts/load-dvb.sh) insmods, by basename.
     MODULES_LIST="
-        drivers/media/usb/em28xx/em28xx.ko
-        drivers/media/usb/em28xx/em28xx-v4l2.ko
-        drivers/media/usb/em28xx/em28xx-dvb.ko
-        drivers/media/dvb-frontends/si2168.ko
-        drivers/media/tuners/si2157.ko
-        drivers/media/dvb-core/dvb-core.ko
-        drivers/media/usb/dvb-usb/dvb-usb.ko
-        drivers/media/v4l2-core/v4l2-common.ko
+        em28xx
+        em28xx-v4l2
+        em28xx-dvb
+        si2168
+        si2157
+        dvb-core
+        dvb-usb
+        v4l2-common
+        tveeprom
+        tuner
+        videobuf2-common
+        videobuf2-memops
+        videobuf2-v4l2
+        videobuf2-vmalloc
+    "
+
+    # Subtrees that produce them. `make M=<dir>` builds the whole directory
+    # (including its subdirectories), so this replaces the old one-make-per-.ko
+    # loop. Directories absent from this kernel tree are skipped, and a module
+    # is collected by name rather than by hard-coded path on purpose: tveeprom
+    # and tuner have moved between kernel releases, and the collection step
+    # finds each .ko wherever it landed.
+    MODULE_DIRS="
+        drivers/media/usb/em28xx
+        drivers/media/dvb-frontends
+        drivers/media/tuners
+        drivers/media/dvb-core
+        drivers/media/usb/dvb-usb
+        drivers/media/v4l2-core
+        drivers/media/common
+        drivers/media/i2c
     "
 
     echo "==> Building kernel modules (this can take 30-90 minutes)..."
     local build_log="$BASE_DIR/logs/build.log"
-    mkdir -p "$BASE_DIR/logs"
+    mkdir -p "$BASE_DIR/logs" /modules-out
 
-    for mod_path in $MODULES_LIST; do
-        mod_name=$(basename "$mod_path" .ko)
-        echo "    -> $mod_name"
-
-        if make ARCH=x86_64 M=$(dirname "$mod_path") -j$(nproc) 2>&1 | tail -5; then
-            if [ -f "$mod_path" ]; then
-                cp "$mod_path" /modules-out/
-                echo "       [OK] $(ls -la $mod_path | awk '{print $5}') bytes"
-            fi
+    for media_dir in $MODULE_DIRS; do
+        if [ ! -d "$media_dir" ]; then
+            echo "    [SKIP] $media_dir (not in this kernel tree)"
+            continue
+        fi
+        echo "    -> building $media_dir"
+        if make ARCH=x86_64 M="$media_dir" -j"$(nproc)" 2>&1 | tee -a "$build_log" | tail -3; then
+            :
         else
-            echo "       [WARN] $mod_name build failed, will try without"
+            echo "       [WARN] $media_dir failed to build"
         fi
     done
 
-    cd ..
-    cd ..
+    echo "==> Collecting modules..."
+    for mod in $MODULES_LIST; do
+        mod_path=$(find drivers/media -name "$mod.ko" -print -quit 2>/dev/null || true)
+        if [ -n "$mod_path" ]; then
+            cp "$mod_path" /modules-out/
+            echo "    [OK]   $mod ($(wc -c <"$mod_path" | tr -d ' ') bytes)"
+        else
+            echo "    [MISS] $mod — not produced; add its subtree to MODULE_DIRS"
+        fi
+    done
+
+    popd
+    popd
 
     echo "==> Build complete. Modules in /modules-out/:"
     ls -la /modules-out/
@@ -119,4 +154,3 @@ function clean() {
 
 
 entry_point "$@"
-

@@ -1,18 +1,41 @@
-# Build outputs
+# ---------------------------------------------------------------------------
+# Host state — never committed. See README "Installing the modules".
+# ---------------------------------------------------------------------------
+# Build-time environment. Secrets/locally-specific paths live here.
+# Ship .env.example instead; the container sources .env, so it must NOT be
+# listed in .dockerignore.
+.env
+.env.local
+!.env.example
+
+# Downloaded QNAP GPL kernel source and the extracted tree (several GB).
+src/
+
+# Build outputs.
 modules/
+*.ko
 logs/
 
-# Downloaded external components
+# Downloaded firmware (dvb-demod-si2168-*.fw). Never vendored — see README.
 firmware/
-build/src/
 
-# Compressed archives
+# ---------------------------------------------------------------------------
+# Build/interchange junk.
+# ---------------------------------------------------------------------------
 *.tar.gz
 *.tar.bz2
 *.tar.xz
 *.zip
-
-# Docker / build cache
 *.bak
+*.backup
 *.log
-.env.local
+*.tmp
+*.swp
+*~
+
+# OS files.
+.DS_Store
+Thumbs.db
+
+# Python bytecode
+__pycache__/
