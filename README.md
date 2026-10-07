@@ -15,6 +15,15 @@ all on a locked-down QTS install.
 | Tuner | Hauppauge WinTV-dualHD, USB ID `2040:8265` (em28xx bridge + Si2168 demod + Si2157 tuner) |
 | Toolchain | [`mammo0/qnap-qts-toolchain:vivid`](https://github.com/mammo0/qnap-qts-toolchain) |
 
+## Status
+
+The scripts, module lists and config patches are checked for syntax and internal
+consistency — `scripts/verify-module-list.sh` and `scripts/check-secrets.sh` run
+clean. The pipeline has **not** been run end to end from this tree yet; that
+proof is a build followed by `ls /dev/dvb` on the NAS. Treat the first run as the
+real test, and expect to adjust `MODULE_DIRS` if your kernel tree lays the media
+subtrees out differently.
+
 ## Project layout
 
 ```
@@ -198,24 +207,27 @@ Different QNAP models also need `QNAP_DEVICE`, `QNAP_VER` and
 `QNAP_KERNEL_CONFIG_FILE` in `.env` pointed at the matching device/version —
 pick the config from `kernel_cfg/` inside the downloaded GPL source.
 
-## Related projects
+## Where this fits
+
+This repository is the driver half of a small home PVR setup — it exists so the
+rest of that setup has a `/dev/dvb` to record from. The other halves are
+separate projects, and neither is needed to use this one: the modules are
+useful to any QTS host that wants a DVB adapter.
 
 | Project | Role |
 |---|---|
-| [`petekaik/qnap-driver-builder`](https://github.com/petekaik/qnap-driver-builder) | **This repo's published remote.** `<projects-dir>/<retired-working-copy>` was the working copy that carried the `apply_patches.py` and `load-dvb.sh` fixes; those are merged in here now and that directory is retired. |
-| `<projects-dir>/qnap-pvr` | The consumer: containerised Tvheadend + Jellyfin + comskip + transcode PVR stack that records from `/dev/dvb` and post-processes to MP4. |
-| `<projects-dir>/pvr-cubox-fleet` | The transcode fleet: two SolidRun CuBox i4Pro offline batch transcode appliances. Their **serial console** (MicroUSB UART, 115200 8N1; netconsole as fallback when no USB-TTL adapter is attached) is the out-of-band route for monitoring and remediating a box that will not come up. |
-| `<projects-dir>/<transcoder-working-copy>` | Transcode container scripts staged out of the PVR stack. |
+| QNAP PVR stack | Containerised Tvheadend + Jellyfin + comskip + transcode services that record from `/dev/dvb` and post-process to MP4. |
+| CuBox transcode fleet | Two SolidRun CuBox i4Pro offline batch transcode appliances, kept off the NAS so long jobs do not compete with recording. |
 
 ## Troubleshooting
 
 **`firmware file 'dvb-demod-si2168-*.fw' not found`** — copy the requested file
 to `/lib/firmware/` and reload the driver.
 
-**Build fails with `Module.symvers` errors** — a module depends on symbols from a
-module built later. Build dependency subtrees (`media/common`, `media/tuners`,
-`media/dvb-frontends`) before the top-level em28xx modules. The published
-sibling merges `Module.symvers` between stages.
+**Build fails with `Module.symvers` errors** — a module is being built before the
+one it depends on. Build the dependency subtrees (`media/dvb-core`,
+`media/dvb-frontends`, `media/tuners`, `media/common`) ahead of the top-level
+em28xx modules by reordering `MODULE_DIRS` in `2_build_dvb.sh`.
 
 **Modules do not load / `Invalid module format`** — the `.ko` was built for a
 different kernel. Check `uname -r` against `KERNEL_VER`/`QNAP_VER` in `.env`.
