@@ -43,7 +43,7 @@ by hand. If you add a module, add it to the loop *and* to `MODULES_LIST` in
 Startup cron, in `/etc/config/crontab`:
 
 ```
-@reboot root /path/to/qnap-dvb/scripts/load-dvb.sh
+@reboot root /path/to/qnap-driver-builder/scripts/load-dvb.sh
 ```
 
 then `/etc/init.d/crond.sh restart`. Alternatively QTS Control Panel → System →

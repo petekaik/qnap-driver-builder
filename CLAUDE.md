@@ -41,11 +41,11 @@ its own location. Run it on the host and you get host paths; run it from
 with `find … -name <mod>.ko` rather than by hard-coded path, because `tveeprom`
 and `tuner` have moved between kernel releases.
 
-**The repo is a git repo** (remote `git@github.com:petekaik/qnap-dvb.git`). The
-on-disk directory is `qnap-driver-builder` and deliberately differs from the
-remote's name. It inherited that history from `<projects-dir>/<retired-working-copy>`, which
-was absorbed and retired. Layout: builder at the repo root, operational scripts in `scripts/`,
-prose in `docs/`.
+**The repo is a git repo** (remote
+`git@github.com:petekaik/qnap-driver-builder.git`, which matches the on-disk
+directory name). It inherited that history from `<projects-dir>/<retired-working-copy>`,
+which was absorbed and retired. Layout: builder at the repo root, operational
+scripts in `scripts/`, prose in `docs/`.
 
 ## Invariants — do not break these
 
@@ -137,7 +137,7 @@ Remaining limitations:
 
 | Path | Relationship |
 |---|---|
-| `<retired-working-copy>` (**retired**) | Was the working copy that carried the `apply_patches.py` / `load-dvb.sh` fixes. Those are absorbed into **this repo**, which now inherits that history and the `git@github.com:petekaik/qnap-dvb.git` remote. Renamed to `<retired-working-copy>` — do not resurrect it as a second builder. |
+| `<retired-working-copy>` (**deleted**) | Was the working copy that carried the `apply_patches.py` / `load-dvb.sh` fixes. Those are absorbed into **this repo**, which now inherits that history and the remote. Renamed to `<retired-working-copy>`, verified file-by-file against this repo's HEAD, then deleted. Do not resurrect it as a second builder. |
 | `qnap-pvr` | Downstream consumer. Tvheadend + Jellyfin + comskip + transcode containers that record from `/dev/dvb` and post-process to MP4. This repo's output is what makes `/dev/dvb` exist for it. |
 | `pvr-cubox-fleet` | Sibling fleet, not a consumer. Two CuBox i4Pro offline batch transcode appliances. Its **serial console** (MicroUSB UART 115200 8N1; netconsole fallback when no USB-TTL adapter) is the out-of-band monitoring/remediation path for a box that will not boot — see its `docs/05-troubleshooting.md` and `CLAUDE.md` item 18. |
 | `<transcoder-working-copy>` | Transcode container scripts staged out of `qnap-pvr`. |

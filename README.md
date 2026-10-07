@@ -90,7 +90,7 @@ the download).
 cp .env.example .env
 
 # 2. Build the builder image.
-docker build -f Dockerfile.dvb -t qnap-dvb-builder .
+docker build -f Dockerfile.dvb -t qnap-driver-builder .
 
 # 3. Run the build. Mount src/ to cache the kernel tree and
 #    modules/ to collect the .ko files.
@@ -98,7 +98,7 @@ docker run --rm --user root \
     -v "$PWD/src:/build/src" \
     -v "$PWD/modules:/modules-out" \
     -v "$PWD/logs:/build/logs" \
-    qnap-dvb-builder
+    qnap-driver-builder
 ```
 
 First run downloads and extracts the GPL source (~30–90 min of
@@ -202,7 +202,7 @@ pick the config from `kernel_cfg/` inside the downloaded GPL source.
 
 | Project | Role |
 |---|---|
-| [`petekaik/qnap-dvb`](https://github.com/petekaik/qnap-dvb) | **This repo's published remote.** `<projects-dir>/<retired-working-copy>` was the working copy that carried the `apply_patches.py` and `load-dvb.sh` fixes; those are merged in here now and that directory is retired. |
+| [`petekaik/qnap-driver-builder`](https://github.com/petekaik/qnap-driver-builder) | **This repo's published remote.** `<projects-dir>/<retired-working-copy>` was the working copy that carried the `apply_patches.py` and `load-dvb.sh` fixes; those are merged in here now and that directory is retired. |
 | `<projects-dir>/qnap-pvr` | The consumer: containerised Tvheadend + Jellyfin + comskip + transcode PVR stack that records from `/dev/dvb` and post-processes to MP4. |
 | `<projects-dir>/pvr-cubox-fleet` | The transcode fleet: two SolidRun CuBox i4Pro offline batch transcode appliances. Their **serial console** (MicroUSB UART, 115200 8N1; netconsole as fallback when no USB-TTL adapter is attached) is the out-of-band route for monitoring and remediating a box that will not come up. |
 | `<projects-dir>/<transcoder-working-copy>` | Transcode container scripts staged out of the PVR stack. |
