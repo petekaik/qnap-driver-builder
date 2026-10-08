@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Entrypoint for DVB module build container
+# Entrypoint for the kernel-module build container
 
 # Source env if .env exists (in case container is run with persistent volume)
 if [ -f ".env" ]; then
@@ -24,5 +24,5 @@ echo "========================"
 if [ "$1" = "build" ] || [ "$1" = "clean" ]; then
     exec "$@"
 else
-    exec ./2_build_dvb.sh
+    exec ./2_build_modules.sh
 fi
