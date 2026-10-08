@@ -226,7 +226,8 @@ longer silently defeat the check.
 
 Values mirrored **verbatim** from the pre-rename `2_build_dvb.sh` and
 `apply_patches.py`, so the first build is a regression test rather than a
-behaviour change — including the two entries under open item 1.
+behaviour change. The two `=y` entries that could never be collected were
+removed afterwards — see open item 1.
 
 ```sh
 DRIVER_NAME="dvb"
@@ -245,9 +246,8 @@ CONFIG_DVB_USB_V2=m CONFIG_DVB_TUNER_XC5000=m CONFIG_DVB_TUNER_DIB0070=m"
 DRIVER_DIRS="drivers/media/usb/em28xx drivers/media/dvb-frontends \
 drivers/media/tuners drivers/media/dvb-core drivers/media/usb/dvb-usb \
 drivers/media/v4l2-core drivers/media/common drivers/media/i2c"
-DRIVER_MODULES="em28xx em28xx-v4l2 em28xx-dvb si2168 si2157 dvb-core dvb-usb \
-v4l2-common tveeprom tuner videobuf2-common videobuf2-memops videobuf2-v4l2 \
-videobuf2-vmalloc"
+DRIVER_MODULES="em28xx em28xx-v4l2 em28xx-dvb si2168 si2157 dvb-usb tveeprom \
+tuner videobuf2-common videobuf2-memops videobuf2-v4l2 videobuf2-vmalloc"
 DRIVER_LOAD_ORDER="videobuf2-common videobuf2-memops videobuf2-v4l2 \
 videobuf2-vmalloc tuner tveeprom si2157 si2168 dvb-usb em28xx em28xx-dvb"
 DRIVER_SEARCH_ROOTS="drivers/media"
@@ -256,9 +256,9 @@ dvb-demod-si2168-02.fw"
 DRIVER_REQUIRES=""
 ```
 
-Note the count: 31 config entries, 8 dirs, 14 modules, 11 load-order entries,
-3 firmware files. Existing docs claim "33 configs" — they are wrong and the
-count should be deleted from prose rather than corrected (it will rot again).
+Counts are deliberately not stated: they rot, and the earlier "33 configs"
+claim was already wrong. `drivers/dvb/manifest.sh` is the authority this block
+mirrors.
 
 ### 9.2 `drivers/usb-serial/manifest.sh`
 
@@ -327,14 +327,16 @@ the existing check rather than a new suite.
 
 ## 12. Open items and risks
 
-1. **`dvb-core` / `v4l2-common` are in `DRIVER_MODULES` but their configs are
-   `=y`** (`CONFIG_DVB_CORE=y`, `CONFIG_VIDEO_V4L2=y`), and a `=y` symbol cannot
-   emit a `.ko`. They are expected to print `[MISS]` on every build while the
-   README lists them as produced — `DRIVER_MODULES` conflates "build this" with
-   "collect this". **Decision rule, resolved by the first build:** if `[MISS]`
-   appears for them, delete both entries and note that they are built-in
-   dependencies. Deliberately not guessed now, so the first build stays a clean
-   regression test.
+1. **Resolved — `dvb-core` and `v4l2-common` removed from `DRIVER_MODULES`.**
+   Their configs are `=y` (`CONFIG_DVB_CORE=y`, `CONFIG_VIDEO_V4L2=y`), and a
+   `=y` symbol is linked into the kernel image rather than emitted as a `.ko`:
+   `obj-$(CONFIG_DVB_CORE) += dvb-core.o` in `drivers/media/dvb-core/Makefile`,
+   and `v4l2-common.o` is one object inside the `=y` `videodev.o` composite in
+   `drivers/media/v4l2-core/Makefile`. No build of this configuration can
+   produce their `.ko`, so both entries — and the README row that advertised
+   them — were deleted rather than left to print `[MISS]` forever. The general
+   form stands: any `=y` symbol listed in `DRIVER_MODULES` is uncollectible, and
+   the build's `[MISS]` lines are what report it.
 2. **`em28xx-v4l2` is built and installed but never `insmod`ed** — it is in
    `DRIVER_MODULES` and absent from `DRIVER_LOAD_ORDER`. It may be a genuine
    missing load (if `em28xx-dvb` resolves symbols against it) or simply unused

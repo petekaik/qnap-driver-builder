@@ -81,12 +81,15 @@ Modules produced, per family (each manifest's `DRIVER_MODULES`):
 
 | Driver | Modules |
 |---|---|
-| `dvb` | `em28xx` `em28xx-v4l2` `em28xx-dvb` `dvb-usb` `si2168` `si2157` `tuner` `tveeprom` `dvb-core` `v4l2-common` `videobuf2-common` `videobuf2-memops` `videobuf2-v4l2` `videobuf2-vmalloc` |
+| `dvb` | `em28xx` `em28xx-v4l2` `em28xx-dvb` `dvb-usb` `si2168` `si2157` `tuner` `tveeprom` `videobuf2-common` `videobuf2-memops` `videobuf2-v4l2` `videobuf2-vmalloc` |
 | `usb-serial` | `usbserial` `ftdi_sio` `ch341` `pl2303` `cp210x` |
 
 Modules are built by subtree and collected by name (`find … -name <mod>.ko`)
 rather than by hard-coded path, because `tveeprom` and `tuner` have moved
-between kernel releases. `scripts/verify-module-list.sh` asserts each
+between kernel releases. `dvb-core` and `v4l2-common` are absent because their
+configs are `=y`: a built-in symbol is linked into the kernel image, not
+emitted as a `.ko`, so there is nothing to collect.
+`scripts/verify-module-list.sh` asserts each
 manifest's `DRIVER_LOAD_ORDER` is a subset of its `DRIVER_MODULES` and that the
 enabled manifests agree on every `CONFIG_*` value.
 

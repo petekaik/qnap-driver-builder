@@ -16,13 +16,14 @@ CONFIG_DVB_USB_V2=m CONFIG_DVB_TUNER_XC5000=m CONFIG_DVB_TUNER_DIB0070=m"
 DRIVER_DIRS="drivers/media/usb/em28xx drivers/media/dvb-frontends \
 drivers/media/tuners drivers/media/dvb-core drivers/media/usb/dvb-usb \
 drivers/media/v4l2-core drivers/media/common drivers/media/i2c"
-# dvb-core and v4l2-common are listed for build parity, but their configs below
-# are =y, and a =y symbol cannot emit a .ko — expect [MISS] for both at collect
-# time. If that is what you see, delete the two entries: they are built-in
-# dependencies of the modules that matter, not collectible modules.
-DRIVER_MODULES="em28xx em28xx-v4l2 em28xx-dvb si2168 si2157 dvb-core dvb-usb \
-v4l2-common tveeprom tuner videobuf2-common videobuf2-memops videobuf2-v4l2 \
-videobuf2-vmalloc"
+# dvb-core and v4l2-common are deliberately absent. Their configs below are =y,
+# and a =y symbol is linked into the kernel image rather than emitted as a .ko:
+# `obj-$(CONFIG_DVB_CORE) += dvb-core.o` in drivers/media/dvb-core/Makefile, and
+# v4l2-common.o is one object inside the =y videodev.o composite in
+# drivers/media/v4l2-core/Makefile. Both are built-in dependencies of the
+# modules that matter. Any =y symbol listed here would print [MISS] at collect.
+DRIVER_MODULES="em28xx em28xx-v4l2 em28xx-dvb si2168 si2157 dvb-usb tveeprom \
+tuner videobuf2-common videobuf2-memops videobuf2-v4l2 videobuf2-vmalloc"
 DRIVER_LOAD_ORDER="videobuf2-common videobuf2-memops videobuf2-v4l2 \
 videobuf2-vmalloc tuner tveeprom si2157 si2168 dvb-usb em28xx em28xx-dvb"
 DRIVER_SEARCH_ROOTS="drivers/media"
