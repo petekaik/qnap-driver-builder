@@ -145,7 +145,9 @@ Note what is *absent*: `CONFIG_USB=y`. `dvb` owns that key; restating it would m
 
 - [ ] **Step 3: Add `DRIVERS=` to `.env.example`**
 
-Insert after the `OUT_DIR` line in `.env.example`:
+`.env.example` line 1 currently reads `# Build-time environment for the DVB module builder.` — reword it to be family-neutral (`# Build-time environment for the QNAP driver builder.`) in the same edit, since this file already describes a builder that now carries two families.
+
+Then insert after the `OUT_DIR=/build/out` line (confirmed present at line 8), after a blank line:
 
 ```
 # Driver families to build, by manifest directory name under drivers/.
@@ -842,10 +844,12 @@ Delete the `MODULES_LIST="..."` and `MODULE_DIRS="..."` literals and the comment
     done
 ```
 
-- [ ] **Step 9: Confirm no DVB literal survives in the builder**
+- [ ] **Step 9: Reword the stale DVB prose, then confirm no DVB literal survives**
 
-Run: `grep -n -i 'dvb\|em28xx\|si2168\|media_dir' 2_build_modules.sh`
-Expected: no output. Any hit means a DVB-specific literal is still hardcoded.
+The renamed file still says "the DVB / USB-media CONFIG_* entries" in its header comment, "Applying .config patches to enable DVB/USB-media modules" in two echo lines, and names `scripts/load-dvb.sh` in the `MODULES_LIST` comment — all of which are now false. Reword every one of them to family-neutral prose as part of steps 4–8; do not leave them and do not delete them. Use `grep -n -i 'dvb' 2_build_modules.sh` to find them, then re-read the file to catch the ones a grep for one keyword misses.
+
+Run: `grep -n -i 'dvb\|em28xx\|si2168\|media_dir\|apply_patches' 2_build_modules.sh`
+Expected: no output. A hit means either a stale comment (reword it) or a driver literal that still affects behaviour (remove it).
 
 - [ ] **Step 10: Test the plan printer with both drivers (Review Focus item 6)**
 
@@ -961,14 +965,17 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting module load (project: $PROJECT_DIR
 
 ```sh
 # QTS wipes /lib/modules/<kernel>/extra on reboot, so reinstall compiled modules.
-if [ ! -d "${PROJECT_DIR}/modules" ]; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: compiled module backup not found at ${PROJECT_DIR}/modules"
-    exit 1
-fi
-
+# The DRY_RUN branch comes first on purpose: the dry run validates the declared
+# load order, which is a property of the manifests, not of which .ko files this
+# checkout happens to have. Requiring modules/ to be populated would make it
+# useless on any machine that has not just built.
 if [ "$DRY_RUN" = "1" ]; then
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] DRY_RUN: would install ${PROJECT_DIR}/modules/*.ko into ${MODULE_DIR} and run depmod -a"
 else
+    if [ ! -d "${PROJECT_DIR}/modules" ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: compiled module backup not found at ${PROJECT_DIR}/modules"
+        exit 1
+    fi
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] Installing modules to ${MODULE_DIR}"
     mkdir -p "${MODULE_DIR}"
     cp -f "${PROJECT_DIR}/modules/"*.ko "${MODULE_DIR}/"
@@ -1005,17 +1012,22 @@ done
 # underscores while the compiled files use dashes, so map filename -> loaded
 # name for the check. insmod, not modprobe: these are outside the depmod
 # search path until the install above has run.
+#
+# The DRY_RUN branch is checked before the file-existence guard for the same
+# reason as in the install block: it must print the whole declared order even
+# when no .ko has been built yet, which is the only way to verify the order
+# on a development machine.
 for m in $(driver_list_manifests); do
     driver_source "$m" || continue
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] Driver: $DRIVER_NAME ($DRIVER_DESCRIPTION)"
     for mod in $DRIVER_LOAD_ORDER; do
         mod_loaded=$(echo "$mod" | tr '-' '_')
-        if [ ! -f "${MODULE_DIR}/${mod}.ko" ]; then
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Module not found: ${MODULE_DIR}/${mod}.ko [$DRIVER_NAME]"
-            continue
-        fi
         if [ "$DRY_RUN" = "1" ]; then
             echo "[$(date '+%Y-%m-%d %H:%M:%S')] DRY_RUN: would insmod ${MODULE_DIR}/${mod}.ko [$DRIVER_NAME]"
+            continue
+        fi
+        if [ ! -f "${MODULE_DIR}/${mod}.ko" ]; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Module not found: ${MODULE_DIR}/${mod}.ko [$DRIVER_NAME]"
             continue
         fi
         if lsmod | grep -q "^${mod_loaded} "; then
@@ -1049,9 +1061,17 @@ Expected: matches only inside the two `ls`/`echo` lines that *report* `/dev/dvb`
 - [ ] **Step 8: Test the dry run**
 
 Run: `DRY_RUN=1 sh scripts/load-modules.sh; echo "exit=$?"`
-Expected: exit 0. `/lib/modules` untouched (the script bails if `modules/` is absent, which is the correct behaviour on this machine — if `modules/` is empty, `mkdir -p modules` first, or note that the guard fired and check the message).
+Expected: exit 0, and `/lib/modules` untouched. `modules/` exists in this checkout but is empty (`src`, `modules`, `logs`, `firmware` are gitignored host state), so the real path would install nothing — which is exactly why both dry-run branches come before their file checks.
 
-Then read `logs/module-boot.log`. Expected order, per driver: `usbserial, ftdi_sio, ch341, pl2303, cp210x` (usb-serial) and `videobuf2-common … em28xx-dvb` (dvb), each line tagged with its driver. `usbserial` **before** `ftdi_sio` — that ordering is design invariant 7 and the only thing keeping the chip drivers loadable.
+Then read `logs/module-boot.log`. Expected: 16 `DRY_RUN: would insmod` lines — 11 for `dvb`, 5 for `usb-serial` — in declared order, each tagged with its driver. Per driver: `videobuf2-common, videobuf2-memops, videobuf2-v4l2, videobuf2-vmalloc, tuner, tveeprom, si2157, si2168, dvb-usb, em28xx, em28xx-dvb` (dvb, in that order) and `usbserial, ftdi_sio, ch341, pl2303, cp210x` (usb-serial).
+
+Two orderings here are load-bearing and design invariant 7:
+- `usbserial` **before** `ftdi_sio` — the chip drivers resolve `usb_serial_register_drivers` against it.
+- `si2157` and `si2168` **before** `em28xx-dvb`, with the four `videobuf2-*` first.
+
+`dvb` appears before `usb-serial` because the manifest list is sorted; the two families are independent and the *within*-family order is the one that matters.
+
+Also confirm the tail reports both device trees: `ls -la /dev/dvb` and `ls -la /dev/ttyUSB*`, each expected to fail on this machine with its "No … found" message rather than an error.
 
 - [ ] **Step 9: Create the shim (Review Focus item 5)**
 
