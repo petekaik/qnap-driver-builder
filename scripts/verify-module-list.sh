@@ -16,21 +16,25 @@ export DRIVER_ROOT
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
+# A manifest (or the loader) must parse as POSIX sh — it runs under busybox ash.
+# sh -n is NOT enough on its own: where /bin/sh *is* bash (macOS, and this
+# project's dev machines) an array passes it happily, and the failure only
+# appears at boot on the NAS. Grep for the constructs that break there.
+posix_check() {
+    sh -n "$1" || fail "not valid POSIX sh: $1"
+    bash -n "$1" || fail "not valid bash: $1"
+    if grep -nE '^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*=\(|[[:space:]]\[\[|^[[:space:]]*local[[:space:]]' "$1"; then
+        fail "$1 uses a bashism (array, [[ ]], or local) that busybox ash will reject"
+    fi
+}
+
 manifest_count=0
 
 for m in $(driver_list_manifests); do
     driver_source "$m" || fail "cannot source $m"
     driver_validate || fail "invalid manifest: $m"
 
-    # A manifest must parse as POSIX sh — the loader runs it under busybox ash.
-    sh -n "$m" || fail "not valid POSIX sh: $m"
-    bash -n "$m" || fail "not valid bash: $m"
-    # sh -n is NOT enough on its own: where /bin/sh *is* bash (macOS, and this
-    # project's dev machines) an array passes it happily, and the failure only
-    # appears at boot on the NAS. Grep for the constructs that break there.
-    if grep -nE '^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*=\(|[[:space:]]\[\[|^[[:space:]]*local[[:space:]]' "$m"; then
-        fail "$m uses a bashism (array, [[ ]], or local) that busybox ash will reject"
-    fi
+    posix_check "$m"
 
     dup=$(printf '%s\n' "$DRIVER_MODULES" | sort | uniq -d | tr '\n' ' ')
     [ -z "$dup" ] || fail "$DRIVER_NAME: duplicate DRIVER_MODULES entries: $dup"
@@ -39,6 +43,13 @@ for m in $(driver_list_manifests); do
 done
 
 [ "$manifest_count" -gt 0 ] || fail "no manifests found under $DRIVER_MANIFEST_DIR"
+
+# The loader and its shared library are the scripts that actually run under
+# busybox ash on the NAS, unattended, so they get the same POSIX check.
+for s in "$here/load-modules.sh" "$here/lib-drivers.sh"; do
+    [ -f "$s" ] || fail "missing $s"
+    posix_check "$s"
+done
 
 # Every driver named in .env.example must exist, so a typo'd plugin name fails
 # here rather than after a 90-minute build.

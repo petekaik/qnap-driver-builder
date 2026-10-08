@@ -925,7 +925,7 @@ set_drivers "dvb usb-serial"
 rm -f .env
 ```
 
-Expected: only `usb-serial` listed; 5 CONFIG tokens; `make ARCH=x86_64 M=drivers/usb/serial`. This proves a driver does not depend on DVB being enabled. The last line removes the test `.env` — the checkout must be back to its starting state before the commit in step 16.
+Expected: only `usb-serial` listed; 5 CONFIG tokens; `make ARCH=x86_64 M=drivers/usb/serial`. This proves the manifest config-merges with no `dvb` enabled. It does not prove a serial-only *build* works: `usb-serial` deliberately declares no `CONFIG_USB` (`dvb` owns that key as `=y`), so without `dvb` there is no `CONFIG_USB=y` and `usbserial.ko` could not resolve `usbcore`. The last line removes the test `.env` — the checkout must be back to its starting state before the commit in step 16.
 
 - [ ] **Step 15: Syntax-check, secrets check**
 

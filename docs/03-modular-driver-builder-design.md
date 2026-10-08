@@ -148,8 +148,9 @@ becomes a dumb writer with no knowledge of any driver — which is the point.
 ### 6.2 Merge helper — `scripts/lib-drivers.sh`
 
 Shared by the builder, the verifier and the loader so the manifest rules exist
-in exactly one place. POSIX `sh`. The builder uses all of it; the verifier uses
-the list/load/merge/conflict helpers; the loader uses `driver_list_manifests`
+in exactly one place. POSIX `sh`. The builder calls `driver_load_enabled`,
+`driver_source` and `driver_merge_configs`; the verifier uses the
+list/load/merge/conflict helpers; the loader uses `driver_list_manifests`
 and then `driver_source` directly — after sourcing, the manifest's variables
 *are* the accessors, so no `driver_*_of` wrappers exist — and must never call
 `driver_load_enabled` (it has no usable `$DRIVERS` on the NAS — see section 7):
@@ -159,7 +160,8 @@ and then `driver_source` directly — after sourcing, the manifest's variables
 - `driver_load_enabled` — sources the manifests named in `$DRIVERS`, fails on an
   unknown name, resolves `DRIVER_REQUIRES`.
 - `driver_merge_configs` — concatenates every enabled driver's
-  `DRIVER_CONFIGS`, tagging each token with its driver.
+  `DRIVER_CONFIGS`, printing the bare `KEY=VALUE` tokens in driver order; each
+  key's owner is recorded privately so a conflict can name both drivers.
 - `driver_check_config_conflicts` — fails, naming both drivers, when two
   enabled drivers declare the same key with different values.
 
@@ -191,7 +193,9 @@ Details:
   ordering ever matters, that is a `DRIVER_LOAD_PRIORITY` field added then.
 - The `tr '-' '_'` filename→loaded-name mapping stays (`em28xx-dvb.ko` loads as
   `em28xx_dvb`).
-- Log file becomes `logs/module-boot.log`, and each line names its driver.
+- Log file becomes `logs/module-boot.log`; the per-driver load lines name their
+  driver (the header, the `WARN` fallbacks and the end-of-run device summary do
+  not).
 - `insmod` stays, not `modprobe` — unchanged reasoning, unchanged code path.
 
 ## 8. Verification — `scripts/verify-module-list.sh`
@@ -360,4 +364,5 @@ the existing check rather than a new suite.
 - On the NAS: `ls /dev/dvb` unchanged, and `ls /dev/ttyUSB0` appears after the
   serial cable is attached.
 - `docs/05-adding-a-driver.md` describes the contract, and adding a third
-  driver is one new file plus one word in `.env`.
+  driver is one new file plus one word in `.env` — except a family with its own
+  device node, which also adds a line to the loader's end-of-run device summary.

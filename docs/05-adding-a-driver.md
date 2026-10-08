@@ -46,7 +46,9 @@ disagree about what a family contains.
    commands and the `find` commands without downloading anything. The loader
    has its own `DRY_RUN=1`, which prints each driver's declared
    `DRIVER_LOAD_ORDER` with no built `.ko` files, so the order can be checked
-   without a build.
+   without a build. The loader redirects all its output to
+   `logs/module-boot.log`, so that run is silent on the terminal — read the log
+   to see the order.
 
 If the family needs work the manifest cannot express, that is a signal to
 change this contract rather than to add a hook — see *What the contract does

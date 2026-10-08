@@ -67,7 +67,9 @@ driver_validate() {
 }
 
 # driver_load_enabled <name>... — resolve names (and their DRIVER_REQUIRES,
-# transitively) into manifest paths, requires first. Fails on an unknown name.
+# transitively) into manifest paths, requirer first. Each pass prints the names
+# it was handed and queues their requires for the *next* pass, so a required
+# driver is printed after the driver that requires it. Fails on an unknown name.
 driver_load_enabled() {
     [ $# -gt 0 ] || { driver_fail "DRIVER is empty: set DRIVERS= in .env (see .env.example)"; return 1; }
     _drv_out=""

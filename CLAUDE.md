@@ -120,7 +120,8 @@ Remaining limitations:
   `docker build`). Everything operational goes in `scripts/`, everything prose
   in `docs/NN-name.md`.
 - A new driver family is one file in `drivers/` plus one word in `.env`; never
-  add a driver name to a script.
+  add a driver name to a script — except a family with its own device node,
+  which also adds a summary line in `scripts/load-modules.sh`.
 - The tests are plain `sh` scripts with no framework, in `scripts/`:
   `verify-module-list.sh` asserts every manifest's `DRIVER_LOAD_ORDER` is a
   subset of its `DRIVER_MODULES` and that the enabled manifests agree on every

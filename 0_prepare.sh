@@ -32,6 +32,9 @@ while IFS='=' read -r key temp || [ -n "$key" ]; do
         '')
             continue
             ;;
+        '#'*)
+            continue
+            ;;
     esac
     value=$(eval echo "$temp")
     eval export "$key='$value'"

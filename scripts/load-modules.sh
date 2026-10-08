@@ -39,6 +39,10 @@ fi
 # Ensure firmware is installed in /lib/firmware (QTS updates may wipe it).
 for m in $(driver_list_manifests); do
     driver_source "$m" || continue
+    driver_validate || {
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Invalid manifest, skipping: $m"
+        continue
+    }
     for fw in $DRIVER_FIRMWARE; do
         if [ "$DRY_RUN" = "1" ]; then
             echo "[$(date '+%Y-%m-%d %H:%M:%S')] DRY_RUN: would sync firmware $fw [$DRIVER_NAME]"
@@ -65,6 +69,10 @@ done
 # on a development machine.
 for m in $(driver_list_manifests); do
     driver_source "$m" || continue
+    driver_validate || {
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Invalid manifest, skipping: $m"
+        continue
+    }
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] Driver: $DRIVER_NAME ($DRIVER_DESCRIPTION)"
     for mod in $DRIVER_LOAD_ORDER; do
         mod_loaded=$(echo "$mod" | tr '-' '_')
