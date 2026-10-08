@@ -1,5 +1,5 @@
 #!/bin/sh
-# DVB family: Hauppauge WinTV-dualHD (USB 2040:8265) on a TS-X51.
+# DVB family: Hauppauge WinTV-dualHD (USB 2040:8265).
 # Values mirror the pre-plugin builder exactly. See docs/03 section 9.1.
 DRIVER_NAME="dvb"
 DRIVER_DESCRIPTION="Hauppauge WinTV-dualHD: em28xx bridge, Si2168 demod, Si2157 tuner"

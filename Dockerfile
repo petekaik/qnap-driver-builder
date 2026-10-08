@@ -1,4 +1,4 @@
-# Kernel-module builder for QNAP TS-X51: DVB (WinTV-dualHD) and USB-serial families
+# Kernel-module builder for an x86_64 QNAP NAS: DVB (WinTV-dualHD) and USB-serial families
 # Based on mammo0/qnap-ip6tables_nat-module approach
 FROM mammo0/qnap-qts-toolchain:vivid
 

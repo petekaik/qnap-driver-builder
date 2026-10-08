@@ -12,8 +12,8 @@ all on a locked-down QTS install.
 
 | | |
 |---|---|
-| Target device | TS-X51 series (TS-251 / 251+ / 451 / 651 / 851, Celeron J1900, x86_64) |
-| Target OS | QTS 5.2.x, kernel `5.10` (`5.10.60-qnap`) |
+| Target platform | x86_64 QNAP NAS on QTS 5.2.x, kernel `5.10` (`5.10.60-qnap`) |
+| Exact device + release | environment configuration — set by `QNAP_DEVICE` and `QNAP_VER` in `.env`, not pinned here |
 | Tuner | Hauppauge WinTV-dualHD, USB ID `2040:8265` (em28xx bridge + Si2168 demod + Si2157 tuner) |
 | Toolchain | [`mammo0/qnap-qts-toolchain:vivid`](https://github.com/mammo0/qnap-qts-toolchain) |
 
@@ -230,8 +230,8 @@ useful to any QTS host that wants a DVB adapter.
 
 | Project | Role |
 |---|---|
-| QNAP PVR stack | Containerised Tvheadend + Jellyfin + comskip + transcode services that record from `/dev/dvb` and post-process to MP4. |
-| CuBox transcode fleet | Two SolidRun CuBox i4Pro offline batch transcode appliances, kept off the NAS so long jobs do not compete with recording. |
+| PVR stack | Containerised Tvheadend + Jellyfin + comskip + transcode services that record from `/dev/dvb` and post-process to MP4. |
+| Transcode fleet | Offline batch transcode appliances, kept off the NAS so long jobs do not compete with recording. |
 
 ## Troubleshooting
 

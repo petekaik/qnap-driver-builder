@@ -7,16 +7,16 @@
 ## 1. Why
 
 The repository builds the DVB/USB-media kernel modules that QNAP's stock QTS
-kernel omits, so a Hauppauge WinTV-dualHD works on a TS-X51. The name says
-`qnap-driver-builder`, but every shared script is shaped around one driver
+kernel omits, so a Hauppauge WinTV-dualHD works on an x86_64 QNAP NAS. The name
+says `qnap-driver-builder`, but every shared script is shaped around one driver
 family: `Dockerfile.dvb`, `2_build_dvb.sh`, `load-dvb.sh`, a Python file whose
 only job is 31 hardcoded DVB `CONFIG_*` entries, and a verifier that
 regex-parses a `for mod in …` line out of the loader.
 
 The first non-DVB driver is now needed: a **USB-serial bridge driver** so the
-NAS can talk to a serial console over a USB-TTL cable (`/dev/ttyUSB0`). Adding it the
-current way means editing five shared files and threading DVB-specific names
-through code that has nothing to do with DVB.
+NAS can talk to a serial console over a USB-TTL cable (`/dev/ttyUSB0`). Adding
+it the current way means editing five shared files and threading DVB-specific
+names through code that has nothing to do with DVB.
 
 The goal is that adding a driver family means **adding one file and one word to
 `.env`** — not editing the builder, the loader, and the verifier in step.
@@ -419,7 +419,7 @@ the existing check rather than a new suite.
    `drivers/target/target_core_device.c` and
    `drivers/target/qnap/target_core_qtransport.c` reference members —
    `tp_threshold_hit`, `tp_threshold_percent`, `last_hit`, `hit_count` — that
-   `struct qnap_se_dev_attr_dr` does not have under the TS-X51 config this
+   `struct qnap_se_dev_attr_dr` does not have under the target config this
    build applies, so `drivers/target` does not compile. The consequence is
    total, not partial: the `modules` recipe *is* the final modpost pass that
    emits every `.ko`, and make will not run a target's recipe when a

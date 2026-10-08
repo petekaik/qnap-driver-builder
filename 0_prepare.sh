@@ -17,7 +17,7 @@ OUT_DIR="$BASE_DIR/out"
 # Driver families to build, by manifest directory name under drivers/
 DRIVERS=\\\"dvb usb-serial\\\"
 
-# Device: TS-X51 series (TS-251/251+/451/651/851), Celeron J1900, x86_64
+# Device: a QNAP model that has a kernel_cfg/ directory in the GPL source
 QNAP_DEVICE="TS-X51"
 # Latest stable QTS 5.2.x with available GPL source
 QNAP_VER="5.2.3.20250218"

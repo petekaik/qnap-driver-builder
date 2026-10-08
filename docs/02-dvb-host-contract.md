@@ -1,9 +1,9 @@
 # 02 — DVB host contract
 
 What this project must deliver to whatever consumes the tuner, and what the
-consumer is entitled to assume. The consumer today is the containerised PVR
-stack in `<projects-dir>/qnap-pvr` (TVHeadend, fronted by Jellyfin); the contract is
-written so any other recorder can be substituted.
+consumer is entitled to assume. The consumer today is a containerised PVR stack
+(TVHeadend, fronted by Jellyfin); the contract is written so any other recorder
+can be substituted.
 
 ## The interface: `/dev/dvb`
 
@@ -59,5 +59,5 @@ window.
 ## Out of scope here
 
 Tuner configuration, muxes, channel scanning, EPG and recording all live in the
-consumer — for the QNAP PVR stack that is `<projects-dir>/qnap-pvr`
-(`docs/CONFIGURATION.md`). This project ends at "a working `/dev/dvb` exists".
+consumer — in the PVR stack, documented in that project's own
+`docs/CONFIGURATION.md`. This project ends at "a working `/dev/dvb` exists".

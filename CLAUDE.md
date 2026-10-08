@@ -6,8 +6,10 @@ invariants that must not be broken, and the known gaps in this working copy.
 ## Project summary
 
 Cross-builds the kernel modules QNAP's stock QTS kernel omits, so hardware QTS
-ignores works on an **x86_64 QNAP NAS (TS-X51 series, QTS 5.2.x, kernel
-5.10.60-qnap)**. Two driver families are carried: **dvb** — a **Hauppauge
+ignores works on an **x86_64 QNAP NAS running QTS 5.2.x, kernel
+`5.10.60-qnap`**. The exact device and QTS release are environment
+configuration: they live in `QNAP_DEVICE` and `QNAP_VER` in `.env`, not here.
+Two driver families are carried: **dvb** — a **Hauppauge
 WinTV-dualHD** (USB `2040:8265`) DVB-T/T2 stick — and **usb-serial**, so a
 USB-TTL cable enumerates as `/dev/ttyUSB0`.
 
@@ -16,9 +18,9 @@ source (`mammo0/qnap-qts-toolchain:vivid`). The NAS only ever receives finished
 `.ko` files. For DVB the chip chain is em28xx (USB bridge) → Si2168 (demod) →
 Si2157 (tuner); each link needs its own module and the Si2168 needs firmware.
 
-This repo is **not** the PVR stack — it only produces drivers. The stack that
-records from them is `<projects-dir>/qnap-pvr`; the transcode fleet is
-`<projects-dir>/pvr-cubox-fleet`. See *Related projects* at the bottom.
+This repo is **not** the PVR stack — it only produces drivers. The consumer
+stack that records from its output, and the offline transcode appliances it was
+split out from, are separate projects; neither is needed to use this one.
 
 ## Pipeline — how a build actually runs
 
@@ -47,8 +49,8 @@ collected with `find … -name <mod>.ko` rather than by hard-coded path, because
 
 **The repo is a git repo** (remote
 `git@github.com:petekaik/qnap-driver-builder.git`, which matches the on-disk
-directory name). It inherited that history from `<projects-dir>/<retired-working-copy>`,
-which was absorbed and retired. Layout: builder at the repo root, operational
+directory name). It inherited that history from an earlier working copy, which
+was absorbed and retired. Layout: builder at the repo root, operational
 scripts in `scripts/`, prose in `docs/`.
 
 ## Invariants — do not break these
@@ -157,11 +159,19 @@ Remaining limitations:
 - Shell edits are syntax-checked with `bash -n`, Python with
   `python3 -m py_compile`, before committing.
 
-## Related projects (`<projects-dir>/`)
+## Related projects
 
-| Path | Relationship |
-|---|---|
-| `<retired-working-copy>` (**deleted**) | Was the working copy that carried the `apply_patches.py` / `load-dvb.sh` fixes. Those are absorbed into **this repo**, which now inherits that history and the remote. Renamed to `<retired-working-copy>`, verified file-by-file against this repo's HEAD, then deleted. Do not resurrect it as a second builder. |
-| `qnap-pvr` | Downstream consumer. Tvheadend + Jellyfin + comskip + transcode containers that record from `/dev/dvb` and post-process to MP4. This repo's output is what makes `/dev/dvb` exist for it. |
-| `pvr-cubox-fleet` | Sibling fleet, not a consumer. Two CuBox i4Pro offline batch transcode appliances. Its **serial console** (MicroUSB UART 115200 8N1; netconsole fallback when no USB-TTL adapter) is the out-of-band monitoring/remediation path for a box that will not boot — see its `docs/05-troubleshooting.md` and `CLAUDE.md` item 18. |
-| `<transcoder-working-copy>` | Transcode container scripts staged out of `qnap-pvr`. |
+This repo builds drivers only; it does not record. Two kinds of project sit
+around it, and neither is needed to use it:
+
+- a **PVR stack** that consumes the output — Tvheadend + Jellyfin + comskip +
+  transcode services reading from `/dev/dvb` and post-processing to MP4;
+- an **offline transcode fleet** that is a sibling rather than a consumer, kept
+  off the NAS so long jobs do not compete with recording.
+
+Where any of them live is environment configuration, so it is not recorded here
+(invariant 8). One note does belong here, because it is about *this* repo: a
+second working copy once carried the `apply_patches.py` / `load-dvb.sh` fixes
+and existed in no other repo. It was absorbed into this one, which inherited its
+history and its remote, and then retired. Do not resurrect it as a second
+builder.
