@@ -360,19 +360,24 @@ the existing check rather than a new suite.
    the DVB path.
 3. **Config-merge conflicts** are a hard error naming both drivers. A driver
    declaring only what it owns (section 5.1) keeps the guard quiet.
-4. **First load is unverified — and four of the five serial modules are
-   already on the target.** On the target NAS (QTS 5.2.9, kernel
-   `5.10.60-qnap`) QTS's **own** module path `/lib/modules/5.10.60-qnap/`
-   already ships `usbserial.ko`, `ftdi_sio.ko`, `pl2303.ko` and `cp210x.ko`;
-   `lsmod` shows `usbserial 40960 1 pl2303`, so they load and are in use. Only
-   **`ch341.ko`** is absent, and `ch341` is therefore the one module this
-   family actually delivers there. Two consequences to expect on the first
-   load: the loader's `insmod usbserial` will log a failure because QTS's copy
-   is already resident (cosmetic — the module is loaded either way), and if
-   `insmod ch341` fails, the cause is a symbol-CRC or vermagic mismatch
-   against QTS's own `usbserial`, **not** a missing dependency — `usbserial` is
-   QTS's and is in use. Still a `dmesg` check on the first run, not something
-   this design can promise.
+4. **First load: verified on the target NAS, 2026-10-08.** QTS 5.2.9 ships
+   `usbserial.ko`, `ftdi_sio.ko`, `pl2303.ko` and `cp210x.ko` — but they sit
+   **flat in `/lib/modules/5.10.60-qnap/`**, not under the
+   `kernel/drivers/usb/serial/` path an in-tree kernel uses, which is why a
+   `find` for the documented layout comes up empty. Only **`ch341.ko`** is
+   absent, so `ch341` is the one module this family actually adds there.
+
+   The risk this item used to flag did not materialise. Both cross-built
+   modules were `insmod`ed against the running kernel and both loaded clean:
+   `ch341` bound to QTS's resident `usbserial` with no symbol-CRC or vermagic
+   complaint, and `ftdi_sio` drove a real FTDI FT230X to `/dev/ttyUSB0` and read
+   a `cubox-2 login:` prompt at 115200 8N1. So modules built against the
+   newest *published* source, QTS 5.2.3, do load on a NAS running 5.2.9.
+
+   One thing worth knowing: QTS ships `ftdi_sio.ko` but never loads it. The
+   FT230X sat on the bus with no driver bound and no `/dev/ttyUSB0` until the
+   module was `insmod`ed by hand, so a QTS-shipped module is not the same as a
+   QTS-loaded one — check `lsmod`, not `ls /lib/modules`.
 5. **A build is a superset.** With `DRIVERS="dvb usb-serial"` the loader loads a
    module that a given NAS was not built for as a logged "not found", not an
    error. Stated rather than discovered.
@@ -392,9 +397,15 @@ the existing check rather than a new suite.
    per-directory build in section 6 is therefore not a convenience; it is what
    keeps this build away from QNAP's unrelated and, here, uncompilable
    storage-target code.
-8. **QTS has no `screen` / `picocom`.** Attaching is
-   `stty -F /dev/ttyUSB0 115200 raw; cat /dev/ttyUSB0`. Noted in `docs/03`;
-   out of scope by decision (section 2).
+8. **QTS has no `screen`, `picocom` or `stty`** — and busybox's applet list has
+   no `stty` either, so a `stty -F /dev/ttyUSB0 115200 raw; cat /dev/ttyUSB0`
+   recipe silently reads zero bytes there and looks like a dead cable. What
+   does work: Python 2.7 at `/usr/local/bin/python` (2.7, not 3) with `termios`
+   and `select` — set `B115200` and `CS8 | CREAD | CLOCAL`, zero
+   `iflag`/`oflag`/`lflag`, write `"\r\n"`, then read for a few seconds. That is
+   how the item 4 verification was done. Attaching stays a manual operation
+   (section 2); the recipe is recorded here only so the next person does not
+   conclude the link is broken.
 
 ## 13. Definition of done
 
