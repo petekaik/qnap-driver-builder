@@ -20,9 +20,6 @@ echo "Kernel: $(uname -r)"
 echo "Arch: $(uname -m)"
 echo "========================"
 
-# If a command is provided, run it; otherwise default to build
-if [ "$1" = "build" ] || [ "$1" = "clean" ]; then
-    exec "$@"
-else
-    exec ./2_build_modules.sh
-fi
+# `build` and `clean` are subcommands of 2_build_modules.sh, not programs: pass
+# them through rather than exec'ing them. Anything else (or nothing) builds.
+exec ./2_build_modules.sh "$@"
