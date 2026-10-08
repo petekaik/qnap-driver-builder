@@ -1156,6 +1156,7 @@ the old name would otherwise fail silently after a reboot."
 - Rename: `docs/02-host-contract.md` → `docs/02-dvb-host-contract.md`
 - Create: `docs/05-adding-a-driver.md`
 - Modify: `docs/03-modular-driver-builder-design.md`, `README.md`, `CLAUDE.md`
+- Modify: `Dockerfile` (its header comment only — one line of prose, no build behaviour)
 
 **Interfaces:**
 - Consumes: everything above — this task documents the shipped state.
@@ -1295,6 +1296,7 @@ Write that file to `docs/05-adding-a-driver.md`.
 - Quick start: add `DRIVERS="dvb usb-serial"` to the `.env` step; `docker build -f Dockerfile`.
 - Delete every "33 configs" claim — the count is 31 and prose counts rot. Do not replace it with another number.
 - Install section: `scripts/load-modules.sh`, and a note that `/dev/ttyUSB0` is what the serial family adds.
+- Reword `Dockerfile`'s first line, `# Hauppauge dualHD DVB module builder for QNAP TS-X51`, to name both families. Task 3 renamed the file and reworded the entrypoint's header, but nothing owned this line, and it is now the most visible stale claim in the repo — the image builds whatever `DRIVERS=` names. Comment only: do not touch the `FROM`, the `ARG`s, or any `RUN`.
 
 - [ ] **Step 6: Update `CLAUDE.md`**
 
@@ -1307,7 +1309,11 @@ Write that file to `docs/05-adding-a-driver.md`.
 - [ ] **Step 7: Verify the docs match reality**
 
 Run: `grep -rn 'load-dvb\.sh\|2_build_dvb\|Dockerfile\.dvb\|apply_patches\|MODULES_LIST\|dvb-boot\.log' README.md CLAUDE.md docs/`
-Expected: hits only where a shim or the old name is being described as old — in `docs/05` step 9's shim and in `docs/03`'s migration section. Anything else is stale.
+
+Treat the expectation as a **rule, not a list**, because a list would contradict the rest of this task: the old names are legitimate only where the text is describing *history* or the shim. Step 3 deliberately puts `scripts/load-dvb.sh` into `docs/01` — the shim paragraph exists precisely to name it — so a "no hits outside `docs/03`" rule would have the implementer delete the paragraph they were just told to write.
+
+- **Legitimate, leave them:** `docs/03`'s "Why" section and its migration section (they describe the DVB-only past and the rename itself), and the shim paragraph in `docs/01`.
+- **Stale, fix them:** anywhere an old name describes what the repo does *now*. Two survive step 6 unless you look past its bullet list — in `CLAUDE.md`'s fixes table, row 1's "Now" column (`Defined in 2_build_dvb.sh`) and row 5 (`otherwise hard-runs 2_build_dvb.sh`) both state current behaviour, though only the "33 configs" row is called out by name.
 
 - [ ] **Step 8: Full check**
 
@@ -1320,7 +1326,7 @@ Expected: `ALL OK`. The verifier prints its three built-but-never-loaded warning
 - [ ] **Step 9: Commit**
 
 ```bash
-git add -A README.md CLAUDE.md docs/
+git add -A README.md CLAUDE.md docs/ Dockerfile
 git commit -m "docs: describe the manifest contract and update the renamed paths
 
 Adds docs/05-adding-a-driver.md, renames the host contract to
