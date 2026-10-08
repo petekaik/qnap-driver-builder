@@ -13,9 +13,15 @@ CONFIG_RC_DEVICES=y CONFIG_VIDEO_EM28XX=m CONFIG_VIDEO_EM28XX_V4L2=m \
 CONFIG_VIDEO_EM28XX_DVB=m CONFIG_VIDEO_EM28XX_RC=m CONFIG_DVB_SI2165=m \
 CONFIG_DVB_SI2168=m CONFIG_MEDIA_TUNER_SI2157=m CONFIG_DVB_USB=m \
 CONFIG_DVB_USB_V2=m CONFIG_DVB_TUNER_XC5000=m CONFIG_DVB_TUNER_DIB0070=m"
-DRIVER_DIRS="drivers/media/usb/em28xx drivers/media/dvb-frontends \
-drivers/media/tuners drivers/media/dvb-core drivers/media/usb/dvb-usb \
-drivers/media/v4l2-core drivers/media/common drivers/media/i2c"
+# Dependency order, and load-bearing: the builder hands modpost each earlier
+# directory's Module.symvers, so a directory listed before the one that needs
+# its symbols is the difference between a module linking and a module silently
+# not existing. em28xx needs tveeprom (drivers/media/common); si2168 and si2157
+# need __regmap_init_i2c, so drivers/base/regmap is built even though it
+# contributes nothing to DRIVER_MODULES — see docs/03 section 6.
+DRIVER_DIRS="drivers/base/regmap drivers/media/dvb-core drivers/media/common \
+drivers/media/v4l2-core drivers/media/dvb-frontends drivers/media/tuners \
+drivers/media/i2c drivers/media/usb/dvb-usb drivers/media/usb/em28xx"
 # dvb-core and v4l2-common are deliberately absent. Their configs below are =y,
 # and a =y symbol is linked into the kernel image rather than emitted as a .ko:
 # `obj-$(CONFIG_DVB_CORE) += dvb-core.o` in drivers/media/dvb-core/Makefile, and

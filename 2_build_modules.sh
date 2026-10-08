@@ -145,18 +145,56 @@ function build() {
     local build_log="$BASE_DIR/logs/build.log"
     mkdir -p "$BASE_DIR/logs" /modules-out
 
+    # One `make M=<dir>` per DRIVER_DIRS entry, in the order the manifests
+    # declare — and they declare dependency order, because that is what makes
+    # this work. `M=` declares a directory an *external* module build, and
+    # modpost then resolves undefined symbols only against the symbols it
+    # already knows: the ones QNAP itself built, plus whatever
+    # KBUILD_EXTRA_SYMBOLS names. Modpost aborts the whole directory on the
+    # first undefined symbol, so without the accumulation below em28xx (needs
+    # tveeprom_hauppauge_analog from drivers/media/common) and si2168 and si2157
+    # (need __regmap_init_i2c from drivers/base/regmap) are silently absent from
+    # the output while their directories report success.
+    #
+    # Not one whole-tree `make modules`: that builds every =m module QNAP's
+    # config enables, including drivers/target, whose own out-of-tree
+    # qnap_se_dev_attr_dr code does not compile against this device config. A
+    # failed prerequisite stops make from running the `modules` recipe — the
+    # final modpost pass that emits every .ko — so one unrelated QNAP subtree
+    # failing means *no* .ko at all, ours included. -k does not help: the
+    # recipe is skipped, not the failing subtree.
+    local extra_symvers=""
     for m in $manifests; do
         driver_source "$m" || return 1
+
+        # Delete the .ko we are about to build, so a stale file left by an
+        # earlier run cannot be collected as [OK] when this run failed to
+        # produce it. [MISS] is worth nothing if it can be lied to.
+        for mod in $DRIVER_MODULES; do
+            for root in $DRIVER_SEARCH_ROOTS; do
+                find "$root" -name "$mod.ko" -delete 2>/dev/null || true
+            done
+        done
+
         for dir in $DRIVER_DIRS; do
             if [ ! -d "$dir" ]; then
-                echo "    [SKIP] $dir (not in this kernel tree)"
+                echo "    [WARN] [$DRIVER_NAME] DRIVER_DIRS names $dir, which is not in this kernel tree"
                 continue
             fi
-            echo "    -> [$DRIVER_NAME] building $dir"
-            if make ARCH=x86_64 M="$dir" -j"$(nproc)" 2>&1 | tee -a "$build_log" | tail -3; then
+
+            echo "    [$DRIVER_NAME] make M=$dir"
+            if make ARCH=x86_64 M="$dir" KBUILD_EXTRA_SYMBOLS="$extra_symvers" \
+                    -j"$(nproc)" modules 2>&1 | tee -a "$build_log" | tail -3; then
                 :
             else
-                echo "       [WARN] $dir failed to build"
+                echo "    [WARN] [$DRIVER_NAME] $dir failed to build; continuing"
+            fi
+
+            # Absolute: kbuild runs modpost from the tree root, not from here.
+            # A directory with no =m objects writes no Module.symvers, and
+            # naming a missing file would itself be a modpost error.
+            if [ -f "$dir/Module.symvers" ]; then
+                extra_symvers="$extra_symvers $KERNEL_DIR/$dir/Module.symvers"
             fi
         done
     done

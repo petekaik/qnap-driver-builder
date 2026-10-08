@@ -126,9 +126,19 @@ Driver-driven:
    `$KERNEL_DIR/.config`, so this is a single merge pass, not one per driver.
    Tokens from every enabled manifest are collected, checked for conflicts, and
    passed to one `apply_configs.py "$KERNEL_DIR/.config" $TOKENS` call.
-3. **Build.** For each driver, for each dir in `DRIVER_DIRS` in declared order:
-   `make ARCH=x86_64 M=<dir> -j$(nproc)`. A dir absent from the tree is skipped
-   with the existing `[SKIP]`; a failure warns and continues.
+3. **Build.** For each driver, for each dir in `DRIVER_DIRS` **in declared
+   order**, `make ARCH=x86_64 M=<dir> -j$(nproc)`, passing
+   `KBUILD_EXTRA_SYMBOLS` the accumulated `Module.symvers` of every directory
+   built so far. The order and the accumulation are both load-bearing: `M=`
+   makes it an external build, so modpost resolves undefined symbols only
+   against the symbols it already knows — QNAP's own plus those named in
+   `KBUILD_EXTRA_SYMBOLS`. A directory listed before one that exports what its
+   modules need is the difference between the module linking and the module
+   silently not existing, because modpost aborts the whole directory on the
+   first undefined symbol and only warns. Before building a driver the builder
+   deletes the `.ko` it is about to produce, so a stale file cannot be collected
+   as `[OK]` when this run failed to produce it. A dir absent from the tree, or
+   one whose build fails, warns and continues.
 4. **Collect.** For each driver, for each root in `DRIVER_SEARCH_ROOTS`, find
    each `DRIVER_MODULES` entry with `find "$root" -name "$mod.ko" -print -quit`
    and copy it to `/modules-out/`, keeping the `[OK]` / `[MISS]` reporting.
@@ -368,7 +378,21 @@ the existing check rather than a new suite.
    error. Stated rather than discovered.
 6. **Build time is unchanged** (30–90 min for the media subtrees); the serial
    modules add seconds.
-7. **QTS has no `screen` / `picocom`.** Attaching is
+7. **A whole-tree `make modules` cannot be the build, and this is QNAP's bug,
+   not ours.** It was tried, to make symbol resolution a non-issue. It fails:
+   `drivers/target/target_core_device.c` and
+   `drivers/target/qnap/target_core_qtransport.c` reference members —
+   `tp_threshold_hit`, `tp_threshold_percent`, `last_hit`, `hit_count` — that
+   `struct qnap_se_dev_attr_dr` does not have under the TS-X51 config this
+   build applies, so `drivers/target` does not compile. The consequence is
+   total, not partial: the `modules` recipe *is* the final modpost pass that
+   emits every `.ko`, and make will not run a target's recipe when a
+   prerequisite failed, so nothing at all is emitted — `-k` does not help,
+   because the skipped thing is the recipe, not the failing subtree. The
+   per-directory build in section 6 is therefore not a convenience; it is what
+   keeps this build away from QNAP's unrelated and, here, uncompilable
+   storage-target code.
+8. **QTS has no `screen` / `picocom`.** Attaching is
    `stty -F /dev/ttyUSB0 115200 raw; cat /dev/ttyUSB0`. Noted in `docs/03`;
    out of scope by decision (section 2).
 
