@@ -22,12 +22,12 @@ all on a locked-down QTS install.
 The manifests, scripts and configs are checked for syntax and internal
 consistency — `scripts/verify-module-list.sh` runs clean, as does
 `check-secrets.sh` (a user-level tool on `PATH`, shared across projects rather
-than vendored here). The pipeline has now been run end to end: the build produced all 18
-modules, and they were deployed to the NAS and `insmod`ed against the running
-kernel. What is **not** yet verified is the boot path — that the modules come
-back on their own after a reboot. That proof is a reboot followed by
-`ls /dev/dvb` (and `ls /dev/ttyUSB0`) on the NAS. Expect to adjust a manifest's
-`DRIVER_DIRS` if your kernel tree lays a subtree out differently.
+than vendored here). The pipeline has been run end to end: the build produced all
+18 modules, they were deployed to the NAS, `insmod`ed against the running
+kernel, and the **boot path is verified** — a cold reboot on 2026-10-08 brought
+back `/dev/dvb/adapter0` + `adapter1` and `/dev/ttyUSB0` unattended. Expect to
+adjust a manifest's `DRIVER_DIRS` if your kernel tree lays a subtree out
+differently.
 
 ## Project layout
 
@@ -202,18 +202,20 @@ Two things QTS undoes for you:
 
   Run **`scripts/qnap-install.sh`** once on the NAS to wire that up; it is
   idempotent, and re-running it is the repair step after a QTS update that
-  loses the boot path. It installs an `/etc/rcS.d` boot hook, a 5-minute
-  watchdog cron, and a flash `autorun.sh`, so no single QTS update can stop
-  the modules loading. A crontab or Control Panel *Startup* entry pointing at
+  loses the boot path. It installs exactly two things, because on QTS only two
+  things can work: a flash `autorun.sh` on the boot partition (the only hook
+  that runs at boot — `/` is a 400 MB tmpfs, so everything under `/etc` is
+  wiped on every restart), and a watchdog line in `/etc/config/crontab`, which
+  is persistent. A Control Panel *Startup* entry pointing at
   `scripts/load-modules.sh` also works if you prefer to wire it by hand.
 - **A QTS firmware update can change the kernel version** and wipe firmware.
   Custom modules are kernel-version-locked: load an old `.ko` on a new kernel
   and you get `Invalid module format`. After a major QTS update, set `QNAP_VER`
   in `.env` to the new version, rebuild, and reinstall.
 
-The loader loads once at boot; the watchdog installed alongside it notices a
-tuner that drops off afterwards. Both, and the three layers `qnap-install.sh`
-wires up, are described in
+The loader loads once at boot; the watchdog notices a tuner that drops off
+afterwards. Both, and why the obvious `/etc` places to install them do not
+survive a reboot on QTS, are described in
 [`docs/01-boot-and-persistence.md`](docs/01-boot-and-persistence.md).
 
 ## Feeding Tvheadend

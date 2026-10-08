@@ -7,13 +7,16 @@
 #
 # DRY_RUN=1 prints what it would do without touching /lib/modules.
 #
-# Exit codes 1/2/3 are what dvb-watchdog.sh keys off, so they are part of the
-# contract, not decoration.
+# Exit codes 0/1/2 are what dvb-watchdog.sh keys off, so they are part of the
+# contract, not decoration: 0 all modules loaded, 1 no modules/ to install from,
+# 2 at least one insmod failed.
 #
-# Resolve the real script location even when invoked through a symlink. QNAP
-# runs the boot loader as /etc/init.d/dvb-loader.sh, a symlink to this file, so
-# a plain `dirname "$0"` would resolve PROJECT_DIR to /etc, find no manifests
-# and silently load nothing. busybox ash has no `readlink -f`, hence the walk.
+# Resolve the real script location even when invoked through a symlink — a
+# hand-wired Control Panel startup entry or crontab line may point at one, and a
+# plain `dirname "$0"` would then resolve PROJECT_DIR to /etc, find no manifests
+# and silently load nothing. The normal callers (the flash autorun.sh, and
+# dvb-watchdog.sh) use the absolute path and never needed this. busybox ash has
+# no `readlink -f`, hence the walk.
 _realpath() {
     _p=$1
     while [ -L "$_p" ]; do

@@ -129,10 +129,18 @@ Remaining limitations:
 - **`build_env.sh` has no guard on an unset `TMP_DIR`** — `_leave()` runs
   `rm -rf "$TMP_DIR"`. Harmless while it is empty (`rm -f`), but check callers
   before that variable ever gains a value.
-- **The boot path is still unverified.** The build has been run end to end
-  (18/18 modules) and deployed, and the modules load on demand; what is not yet
-  proven is that a reboot brings them back unattended. That proof is a reboot
-  followed by `ls /dev/dvb` and `ls /dev/ttyUSB0` on the NAS.
+- **The boot path is verified — and do not re-add the layers it lost.** A cold
+  reboot on 2026-10-08 brought `/dev/dvb/adapter0` + `adapter1` and
+  `/dev/ttyUSB0` back unattended, and proved that two of the three mechanisms
+  `qnap-install.sh` used to install do nothing on QTS: `/` is a 400 MB tmpfs, so
+  everything under `/etc` — `/etc/init.d`, `/etc/rcS.d` — is wiped on every
+  boot, and `/etc/config/user_cmd/*.cron` is not a cron mechanism at all.
+  `/etc/config/crontab.dynamic.*` is a trap here too (merged only under
+  `crond.sh`'s viostor marker, absent on a TS-x51). The only boot hook is the
+  flash `autorun.sh`; the watchdog's cron is a line in `/etc/config/crontab`.
+  The installer now removes the stale artefacts on every run, and
+  `docs/01-boot-and-persistence.md` records why. Reintroducing any of them
+  recreates a watchdog that looks installed and has never once run.
 
 ## Conventions
 

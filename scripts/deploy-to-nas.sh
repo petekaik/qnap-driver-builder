@@ -159,8 +159,8 @@ deployed:       $(date +%Y-%m-%d)
 #   modules/    compiled .ko files
 #   firmware/   Si2168 demod firmware — exists ONLY here; never synced with --delete
 
-loader:         scripts/load-modules.sh   (via /etc/init.d/dvb-loader.sh at boot)
-watchdog:       scripts/dvb-watchdog.sh   (QTS cron, every 5 minutes)
+loader:         scripts/load-modules.sh   (via the flash autorun.sh at boot)
+watchdog:       scripts/dvb-watchdog.sh   (line in /etc/config/crontab, every 5 min)
 install:        scripts/qnap-install.sh   (idempotent — re-run after a QTS update)
 
 # To update: sh scripts/deploy-to-nas.sh from the source repo, then re-run

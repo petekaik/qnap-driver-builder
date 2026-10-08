@@ -52,25 +52,45 @@ scripts/qnap-install.sh
 ```
 
 It derives every path from its own location, so the checkout can live anywhere.
-
 It is idempotent, and re-running it is the repair step after any QTS update that
-loses the boot path. It installs three layers, least durable first, so a
-firmware update has to destroy all three to stop the modules loading:
+loses the boot path.
 
-| Layer | Path | Survives |
+It installs two things, and only two, because what decides whether a mechanism
+works is a reboot — not whether the file is there:
+
+| Layer | Path | Why it works |
 |---|---|---|
-| boot ordering | `/etc/init.d/dvb-loader.sh` → `scripts/load-modules.sh`, and `/etc/rcS.d/S98dvb-loader` → that | normal reboots; `S98` runs before QNAP's own `S99` services |
-| watchdog | `/etc/config/user_cmd/dvb-watchdog.cron`, every 5 minutes | firmware updates that wipe `/etc/rcS.d` or `/etc/init.d` |
-| flash autorun | `/tmp/config/autorun.sh` on the boot flash, plus `Misc Autorun=TRUE` via `setcfg` | firmware updates, because it lives on the flash partition |
+| boot | `/tmp/config/autorun.sh` on the boot flash partition, plus `Misc Autorun=TRUE` via `setcfg` | QTS mounts that partition, runs the script, then unmounts it. It is the only hook that runs custom code at boot |
+| watchdog | one tagged line in `/etc/config/crontab`, every 5 minutes | `/etc/config` is a symlink onto the persistent config volume (ext3, on `/dev/md9`), so unlike `/etc` itself it is real storage. `/etc/init.d/crond.sh` reads that file at boot, and `/usr/bin/crontab` installs it into crond's spool |
 
-The installed names say `dvb` for history: they are what the NAS already has,
-and renaming a live boot path to gain tidiness risks a dangling symlink and a
-silent loss of load-on-boot. What they point at is family-neutral.
+### The places that look right and are not
 
-QTS Control Panel → System → Hardware → Schedule → *Startup* is an alternative
-to the rcS link. A crontab still pointing at `scripts/load-dvb.sh` keeps working
-through the shim, which `exec`s the new loader; delete the shim once every NAS
-has been repointed.
+An earlier version of this installer wrote `/etc/init.d/dvb-loader.sh`,
+`/etc/rcS.d/S98dvb-loader` and `/etc/config/user_cmd/dvb-watchdog.cron`, and
+described them as three independent layers that a firmware update would have to
+destroy one by one. A reboot on 2026-10-08 showed all three did nothing, so the
+real redundancy was zero:
+
+- **`/` is a 400 MB tmpfs.** So `/etc` is RAM: `/etc/init.d`, `/etc/rcS.d` and
+  `/lib/modules/<ver>/extra` are wiped at every boot. Confirming those files
+  exist proves nothing — they did exist, right up until the restart that removed
+  them.
+- **`/etc/config/user_cmd/*.cron` is not a cron mechanism.** `/sbin/user_cmd`
+  runs user *commands*; the crontab calls it once a day at 00:00.
+- **`/etc/config/crontab.dynamic.*` is the right slot on a viostor QTS and a
+  trap anywhere else.** `crond.sh` merges those files only inside its
+  `[ -e /var/._viostor_ ]` branch, and that marker does not exist on a TS-x51,
+  so such a file would be read on no boot at all.
+
+`qnap-install.sh` removes stale copies of all four on every run, including the
+two in the persistent `/etc/config` — those would otherwise outlive a reboot and
+keep advertising a boot path that is not there.
+
+Control Panel → System → Hardware → Schedule → *Startup* is an alternative to
+installing the flash hook by hand: it is the same `autorun.sh` mechanism behind
+a GUI, so it also survives reboots. A crontab still pointing at
+`scripts/load-dvb.sh` keeps working through the shim, which `exec`s the new
+loader; delete the shim once every NAS has been repointed.
 
 Verify on the next boot with:
 
@@ -80,24 +100,24 @@ ls /dev/dvb /dev/ttyUSB*
 tail -20 logs/module-boot.log
 ```
 
-## Approach B — rcS + `autorun.sh` + watchdog (implemented)
+## Approach B — flash `autorun.sh` + watchdog (implemented)
 
 Approach A alone loads once at boot and does not notice a device that drops off
 afterwards — a USB re-enumeration after a reset, or a QTS update that wipes the
-boot path. Approach B adds recovery and is what `qnap-install.sh` installs:
+boot hook. Approach B adds recovery and is what `qnap-install.sh` installs:
 
-- `/etc/rcS.d/S98dvb-loader` gives the load a place in the boot ordering rather
-  than racing USB enumeration;
+- `autorun.sh` on the flash partition is the boot hook itself, and the only part
+  of this that runs code at boot;
 - `scripts/dvb-watchdog.sh` runs every 5 minutes, exits silently while the health
-  path exists, and otherwise re-runs the installer and then the loader, so a QTS
-  update that wipes the boot path heals without a reboot;
-- `autorun.sh` on the flash partition is the most durable hook, and the one a QTS
-  firmware update is least likely to remove.
+  path exists, and otherwise re-runs the installer and then the loader, so a
+  wiped boot path heals without a reboot. It cannot repair its own cron line —
+  if that line is gone the watchdog is not running either — so the boot hook is
+  what brings it back.
 
-The loader's exit codes are the watchdog's signal: `0` loaded, `1` nothing to
-install, `2` at least one `insmod` failed. A loader that reported success after
-loading nothing would make the watchdog worthless, so those codes are a
-contract, not decoration.
+The loader's exit codes are the watchdog's signal: `0` all modules loaded, `1`
+no `modules/` to install from, `2` at least one `insmod` failed. A loader that
+reported success after loading nothing would make the watchdog worthless, so
+those codes are a contract, not decoration.
 
 ## Rebuilding after a QTS update
 

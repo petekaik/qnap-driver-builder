@@ -346,10 +346,12 @@ hardcoded the module list that the manifests now own. Two things it had that
 `load-modules.sh` did not were ported instead: symlink-safe `PROJECT_DIR`
 resolution and real exit codes. A third, its wait for `lsusb` to show the tuner,
 was dropped — the match is device-specific and the loader is not — and became a
-`USB_SETTLE` delay whose default is the old fixed 3 s. The symlink resolution is
-the load-bearing one: QTS runs the loader through `/etc/init.d/dvb-loader.sh`,
-where a plain `dirname "$0"` resolves `PROJECT_DIR` to `/etc` and the loader
-finds no manifests and silently loads nothing.
+`USB_SETTLE` delay whose default is the old fixed 3 s. The symlink resolution
+stays available for hand-wired callers (a Control Panel startup entry pointing
+at a symlink), where a plain `dirname "$0"` resolves `PROJECT_DIR` to `/etc` and
+the loader finds no manifests and silently loads nothing. The boot path itself
+does not use it: QTS runs the loader from the flash `autorun.sh` by absolute
+path. See section 4 and `docs/01-boot-and-persistence.md`.
 
 ## 11. Testing
 

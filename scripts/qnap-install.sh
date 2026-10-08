@@ -5,16 +5,31 @@
 # Run this once on the NAS after copying the repo there, and re-run it after a
 # QTS firmware update if /dev/dvb fails to come back.
 #
-# Idempotent. Three layers, least durable first, so a QTS update has to destroy
-# all three to stop the modules loading:
-#   1. boot ordering:  /etc/init.d/dvb-loader.sh -> scripts/load-modules.sh,
-#                      and /etc/rcS.d/S98dvb-loader -> that, so it runs at boot
-#   2. watchdog:       /etc/config/user_cmd/dvb-watchdog.cron, every 5 minutes
-#   3. flash autorun:  /tmp/config/autorun.sh + Misc Autorun=TRUE, on the flash
-#                      partition, which QTS firmware updates do not wipe
+# Idempotent. Two layers, and only two, because an actual reboot on 2026-10-08
+# proved the other two this installer used to write cannot work on QTS:
 #
-# The symlinks point into the project rather than copying, so editing the repo
-# takes effect on the next boot without re-running this installer.
+#   1. boot:     /tmp/config/autorun.sh + Misc Autorun=TRUE. QTS mounts the boot
+#                flash partition, runs that script, and unmounts it again. It
+#                is the only hook that runs custom code at boot.
+#   2. watchdog: one line in /etc/config/crontab, every 5 minutes.
+#
+# What it deliberately does NOT install, and why — all three were installed
+# here before 2026-10-08 and the reboot showed none of them does anything:
+#
+#   /etc/init.d/*, /etc/rcS.d/*
+#       `/` is a 400 MB tmpfs, so /etc is RAM and is wiped every boot. The
+#       boot-time `ls` that once "verified" these only ever confirmed the files
+#       existed, which they did — until the next restart.
+#   /etc/config/user_cmd/*.cron
+#       Not a cron mechanism. /sbin/user_cmd runs user *commands*; QTS builds
+#       its crontab in /etc/init.d/crond.sh from /etc/config/crontab.
+#   /etc/config/crontab.dynamic.*
+#       That merge sits inside crond.sh's `[ -e /var/._viostor_ ]` branch, and
+#       no such marker exists on a TS-x51, so the file would be read on no boot
+#       at all. It is the right slot on a viostor QTS; it is a trap here.
+#
+# Stale copies of the retired artefacts are removed on every run (RETIRE below),
+# including the two that live in the persistent /etc/config.
 #
 # Machine-specific values come from the environment, not from literals in this
 # file (CLAUDE.md invariant 8):
@@ -22,9 +37,9 @@
 #                     (default /dev/sdc, the TS-x51 value)
 set -u
 
-# Resolve through symlinks: this is installed as an /etc symlink, where a plain
-# `dirname "$0"` would resolve PROJECT_DIR to /etc. busybox ash has no
-# `readlink -f`, hence the walk.
+# Resolve through symlinks: this may be invoked through one (a hand-wired
+# startup entry, for instance), where a plain `dirname "$0"` would resolve
+# PROJECT_DIR to /etc. busybox ash has no `readlink -f`, hence the walk.
 _realpath() {
     _p=$1
     while [ -L "$_p" ]; do
@@ -43,14 +58,21 @@ PROJECT_DIR=$(cd "$(dirname "$(_realpath "$0")")/.." && pwd)
 LOADER_SRC="${PROJECT_DIR}/scripts/load-modules.sh"
 WATCHDOG_SRC="${PROJECT_DIR}/scripts/dvb-watchdog.sh"
 
-# The init/rcS names say "dvb" for history: that is what is already installed on
-# the NAS, and renaming a live boot path to gain tidiness risks a dangling
-# symlink and a silent loss of load-on-boot. The loader they point at is
-# family-neutral and reads the manifests.
-INIT_LOADER="/etc/init.d/dvb-loader.sh"
-INIT_WATCHDOG="/etc/init.d/dvb-watchdog.sh"
-RC_LINK="/etc/rcS.d/S98dvb-loader"
-USER_CMD_CRON="/etc/config/user_cmd/dvb-watchdog.cron"
+[ -f "$LOADER_SRC" ] || { echo "qnap-install: loader not found at $LOADER_SRC" >&2; exit 1; }
+[ -f "$WATCHDOG_SRC" ] || { echo "qnap-install: watchdog not found at $WATCHDOG_SRC" >&2; exit 1; }
+chmod 755 "$LOADER_SRC" "$WATCHDOG_SRC"
+
+CRONTAB="/etc/config/crontab"
+# Tagging the line the way QTS tags its own entries (see
+# `/bin/...;#_QSC_:MalwareRemover:...` in $CRONTAB) makes it findable again on
+# the next run, which is what lets a moved repo rewrite its own path.
+CRON_MARKER="qnap-driver-builder:watchdog"
+
+# The boot path this installer used to write. Dead on QTS — see the header.
+RETIRED="/etc/init.d/dvb-loader.sh
+/etc/init.d/dvb-watchdog.sh
+/etc/rcS.d/S98dvb-loader
+/etc/config/user_cmd/dvb-watchdog.cron"
 
 # No log redirect on purpose: run by hand, the operator needs to see the
 # next-steps block below; run by dvb-watchdog.sh, this output already lands in
@@ -58,76 +80,62 @@ USER_CMD_CRON="/etc/config/user_cmd/dvb-watchdog.cron"
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] qnap-install start (project=$PROJECT_DIR)"
 
 # ----------------------------------------------------------------------------
-# Layer 1a. /etc/init.d symlinks
+# Retire the artefacts earlier versions of this installer wrote
 # ----------------------------------------------------------------------------
-# /etc/init.d survives normal reboots but may be wiped by a QTS firmware
-# update — dvb-watchdog.sh restores it.
-install_symlink() {
-    _src=$1
-    _dest=$2
-    if [ ! -f "$_src" ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: not found at $_src"
-        return 1
+# Two of the four live in the persistent /etc/config, so unlike the /etc ones
+# they would survive a reboot and keep advertising a boot path that does not
+# exist. Removing them is idempotent, and absent is the normal case after the
+# first run.
+for stale in $RETIRED; do
+    if [ -e "$stale" ] || [ -L "$stale" ]; then
+        rm -f "$stale" && echo "[$(date '+%Y-%m-%d %H:%M:%S')] retired: $stale"
     fi
-    chmod 755 "$_src"
-    # Replace a real file, or a symlink pointing somewhere else (the project may
-    # have moved since the last install).
-    if [ -e "$_dest" ] && [ ! -L "$_dest" ]; then
-        rm -f "$_dest"
-    fi
-    if [ -L "$_dest" ] && [ "$(readlink "$_dest")" = "$_src" ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] already installed: $_dest"
-        return 0
-    fi
-    rm -f "$_dest"
-    ln -s "$_src" "$_dest" && echo "[$(date '+%Y-%m-%d %H:%M:%S')] installed: $_dest -> $_src"
-}
-
-install_symlink "$LOADER_SRC" "$INIT_LOADER" || exit 1
-install_symlink "$WATCHDOG_SRC" "$INIT_WATCHDOG" || exit 1
+done
 
 # ----------------------------------------------------------------------------
-# Layer 1b. /etc/rcS.d/S98dvb-loader
+# Layer 1. The watchdog cron, in /etc/config/crontab
 # ----------------------------------------------------------------------------
-# QNAP's own services start at S99, so S98 places us before them.
-if [ -e "$RC_LINK" ] || [ -L "$RC_LINK" ]; then
-    rm -f "$RC_LINK"
-fi
-ln -s "$INIT_LOADER" "$RC_LINK"
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] installed: $RC_LINK -> $INIT_LOADER"
-
-# ----------------------------------------------------------------------------
-# Layer 2. Cron registration via user_cmd
-# ----------------------------------------------------------------------------
-# QNAP's own `0 0 * * * /sbin/user_cmd -C` runs every *.cron file in
-# /etc/config/user_cmd/, so dropping a file there avoids editing
-# /etc/config/crontab directly (which QTS firmware updates wipe).
+# /etc/config/crontab is the file QTS itself reads. /etc/init.d/crond.sh appends
+# its own entries to it at boot and /usr/bin/crontab installs it into crond's
+# spool; it lives on /dev/md9 through the /etc/config symlink, so it survives a
+# reboot, which /tmp does not.
 #
-# Rewritten whenever the content differs, not only when the file is absent: the
-# cron line embeds an absolute path to the project, so a repo that has moved
-# would otherwise leave the watchdog pointing at a path that no longer exists —
-# the one failure mode that looks exactly like everything being fine.
-USER_CMD_CRON_LINE="*/5 * * * * ${WATCHDOG_SRC} >/dev/null 2>&1"
-USER_CMD_DIR="$(dirname "$USER_CMD_CRON")"
+# Written whenever the content differs, not only when the file is absent: the
+# line embeds an absolute path to the project, so a repo that has moved would
+# otherwise leave the watchdog pointing at a path that no longer exists — the
+# one failure mode that looks exactly like everything being fine.
+CRON_LINE="*/5 * * * * ${WATCHDOG_SRC} >/dev/null 2>&1 #${CRON_MARKER}"
 
-if [ -d "$USER_CMD_DIR" ] || mkdir -p "$USER_CMD_DIR" 2>/dev/null; then
-    if grep -qxF "$USER_CMD_CRON_LINE" "$USER_CMD_CRON" 2>/dev/null; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] already present: $USER_CMD_CRON"
-    else
-        printf '%s\n' "$USER_CMD_CRON_LINE" > "$USER_CMD_CRON"
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] installed: $USER_CMD_CRON"
-    fi
+if [ ! -f "$CRONTAB" ]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: no $CRONTAB, watchdog cron not registered"
+elif grep -qxF "$CRON_LINE" "$CRONTAB"; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] already present: $CRON_LINE"
 else
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: could not create $USER_CMD_DIR, watchdog cron not registered"
+    # One backup, overwritten each time — this is QTS's live crontab, and the
+    # sed below is the only thing here that edits a file in place.
+    cp "$CRONTAB" "${CRONTAB}.bak-qnap-driver-builder" 2>/dev/null
+    sed -i "/${CRON_MARKER}/d" "$CRONTAB"      # drop a stale line for this job
+    printf '%s\n' "$CRON_LINE" >> "$CRONTAB"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] installed: $CRON_LINE"
+fi
+
+# Arm it now rather than at the next boot. crond reads a spool copy under /tmp,
+# so editing the source file alone would not take effect until crond.sh
+# regenerates it — which is exactly the "wrote the file, nothing runs" trap this
+# installer was in.
+if [ -x /usr/bin/crontab ] && [ -f "$CRONTAB" ]; then
+    /usr/bin/crontab "$CRONTAB" && \
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] reloaded: crond spool from $CRONTAB"
 fi
 
 # ----------------------------------------------------------------------------
-# Layer 3. QNAP-native flash autorun.sh
+# Layer 2. QNAP-native flash autorun.sh
 # ----------------------------------------------------------------------------
-# /tmp/config/autorun.sh lives on the flash partition and survives QTS firmware
-# updates, which /etc/rcS.d symlinks do not. It is gated by the "Misc Autorun"
-# config flag (Control Panel -> Hardware -> General), enabled here via setcfg so
-# the install stays scriptable.
+# /tmp/config/autorun.sh lives on the boot flash partition, which QTS mounts,
+# runs, and unmounts during boot. It is the one hook that runs custom code at
+# boot on this platform — everything under /etc is on the tmpfs. It is gated by
+# the "Misc Autorun" config flag (Control Panel -> Hardware -> General), enabled
+# here via setcfg so the install stays scriptable.
 BOOT_PD_FALLBACK="${BOOT_PD_FALLBACK:-/dev/sdc}"
 HAL_BOOT_PD=$(/sbin/hal_app --get_boot_pd port_id=0 2>/dev/null || echo "$BOOT_PD_FALLBACK")
 CONFIG_PART="${HAL_BOOT_PD}6"
@@ -192,3 +200,5 @@ echo "Next steps:"
 echo "  1. Test now:        ${LOADER_SRC}"
 echo "  2. Verify:          ls -la /dev/dvb /dev/ttyUSB*"
 echo "  3. Simulate crash:  ${WATCHDOG_SRC}"
+echo "  4. Confirm the cron is live (expect one ${CRON_MARKER} line):"
+echo "         crontab -l | grep ${CRON_MARKER}"

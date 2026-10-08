@@ -1,9 +1,9 @@
 #!/bin/sh
 # Watchdog for the module loader. Runs every 5 minutes from cron, installed by
-# qnap-install.sh as /etc/config/user_cmd/dvb-watchdog.cron.
+# qnap-install.sh as one tagged line in /etc/config/crontab.
 #
 # Recovers from the situations where the modules stop being loaded:
-#   - a QTS firmware update wiped /etc/rcS.d/ or /etc/init.d/dvb-loader.sh
+#   - a QTS update wiped the flash autorun.sh, so nothing ran at boot
 #   - the USB device was unplugged during boot
 #   - module load order raced with USB enumeration
 #
@@ -13,6 +13,9 @@
 #   2. If the installed artefacts are missing, re-run qnap-install.sh (it is
 #      idempotent).
 #   3. Re-run the loader directly, so the device comes back without a reboot.
+#
+# Note this cannot repair its own cron line: if that line is gone the watchdog
+# is not running either. The flash autorun.sh at boot is what restores it.
 #
 # A second watchdog inside the TVH container restarts the container if the
 # device is still missing after a few retries, covering the container side.
@@ -24,8 +27,8 @@
 #                loaded is the cheapest such signal.
 set -u
 
-# Resolve through symlinks: installed as /etc/init.d/dvb-watchdog.sh, where a
-# plain `dirname "$0"` would resolve PROJECT_DIR to /etc.
+# Resolve through symlinks: this may be invoked through one, where a plain
+# `dirname "$0"` would resolve PROJECT_DIR to the symlink's directory.
 _realpath() {
     _p=$1
     while [ -L "$_p" ]; do
@@ -59,10 +62,11 @@ fi
 
 echo "[$TS] watchdog: $HEALTH_PATH missing, attempting recovery"
 
-# Re-install everything if a QTS firmware update wiped it.
-if [ ! -f /etc/init.d/dvb-loader.sh ] || [ ! -L /etc/rcS.d/S98dvb-loader ] || \
-   [ ! -f /etc/config/user_cmd/dvb-watchdog.cron ]; then
-    echo "[$TS] watchdog: host-side artefacts missing, re-running installer"
+# Re-install everything if a QTS update wiped the boot path. The cron line is
+# the cheap half of "wiped" to test; the flash autorun.sh needs a mount, so it
+# is checked separately below.
+if ! grep -q "qnap-driver-builder:watchdog" /etc/config/crontab 2>/dev/null; then
+    echo "[$TS] watchdog: cron line missing, re-running installer"
     if [ -f "$INSTALLER" ]; then
         "$INSTALLER"
     else
@@ -71,10 +75,11 @@ if [ ! -f /etc/init.d/dvb-loader.sh ] || [ ! -L /etc/rcS.d/S98dvb-loader ] || \
     fi
 fi
 
-# Also restore the flash autorun.sh, the most durable piece. Only mount the
-# flash partition if it is not already mounted, and only unmount it again if
-# this script was the one that mounted it — unmounting someone else's mount
-# would be a spectacular way for a watchdog to cause an outage.
+# Also restore the flash autorun.sh, which is the boot path proper: without it
+# nothing loads the modules at all. Only mount the flash partition if it is not
+# already mounted, and only unmount it again if this script was the one that
+# mounted it — unmounting someone else's mount would be a spectacular way for a
+# watchdog to cause an outage.
 BOOT_PD_FALLBACK="${BOOT_PD_FALLBACK:-/dev/sdc}"
 MOUNTED_BY_US=0
 if ! grep -q " /tmp/config " /proc/mounts 2>/dev/null; then
