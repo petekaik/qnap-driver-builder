@@ -1,4 +1,4 @@
-# 02 — Host contract
+# 02 — DVB host contract
 
 What this project must deliver to whatever consumes the tuner, and what the
 consumer is entitled to assume. The consumer today is the containerised PVR

@@ -148,16 +148,16 @@ becomes a dumb writer with no knowledge of any driver — which is the point.
 ### 6.2 Merge helper — `scripts/lib-drivers.sh`
 
 Shared by the builder, the verifier and the loader so the manifest rules exist
-in exactly one place. POSIX `sh`, small (target: under ~80 lines). The builder
-uses all of it; the verifier uses the list/load/merge/conflict helpers; the
-loader uses `driver_list_manifests` and the `driver_*_of` accessors, and must
-never call `driver_load_enabled` (it has no usable `$DRIVERS` on the NAS — see
-section 7):
+in exactly one place. POSIX `sh`. The builder uses all of it; the verifier uses
+the list/load/merge/conflict helpers; the loader uses `driver_list_manifests`
+and then `driver_source` directly — after sourcing, the manifest's variables
+*are* the accessors, so no `driver_*_of` wrappers exist — and must never call
+`driver_load_enabled` (it has no usable `$DRIVERS` on the NAS — see section 7):
 
 - `driver_list_manifests` — absolute paths of `drivers/*/manifest.sh`, sorted.
+- `driver_source` — clears the contract variables, then sources one manifest.
 - `driver_load_enabled` — sources the manifests named in `$DRIVERS`, fails on an
   unknown name, resolves `DRIVER_REQUIRES`.
-- `driver_all_modules_of` / `driver_load_order_of` / `driver_firmware_of`.
 - `driver_merge_configs` — concatenates every enabled driver's
   `DRIVER_CONFIGS`, tagging each token with its driver.
 - `driver_check_config_conflicts` — fails, naming both drivers, when two
@@ -220,7 +220,7 @@ longer silently defeat the check.
 
 ### 9.1 `drivers/dvb/manifest.sh`
 
-Values mirrored **verbatim** from today's `2_build_dvb.sh` and
+Values mirrored **verbatim** from the pre-rename `2_build_dvb.sh` and
 `apply_patches.py`, so the first build is a regression test rather than a
 behaviour change — including the two entries under open item 1.
 

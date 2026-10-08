@@ -28,7 +28,8 @@ The loader in this repo. On every boot it:
    chain is still `videobuf2-*` → `tuner` → `tveeprom` → `si2157` → `si2168` →
    `dvb-usb` → `em28xx` → `em28xx-dvb`, and USB-serial is `usbserial` → chip
    driver;
-4. logs everything to `logs/module-boot.log` and finishes by listing `/dev/dvb`.
+4. logs everything to `logs/module-boot.log` and finishes by listing `/dev/dvb`
+   and `/dev/ttyUSB*`.
 
 It derives the project root from its own location (`dirname "$0"/..`), so it
 works from wherever the repo is cloned, and it is idempotent — a module already

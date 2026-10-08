@@ -34,10 +34,19 @@ disagree about what a family contains.
 ## Recipe
 
 1. Create `drivers/<name>/manifest.sh` with the variables above.
-2. Add `<name>` to `DRIVERS=` in `.env`.
+2. Add `<name>` to `DRIVERS=` in **`.env.example`** as well as `.env`, then
+   rebuild the image so it carries the new value:
+   `docker build -f Dockerfile -t qnap-driver-builder .`. `.env` is copied in
+   at `docker build` time and is not mounted on the `run` line, so editing it
+   alone leaves an already-built image still running the old set. The verifier
+   and CLAUDE.md's invariant key on `.env.example`, so a name only in `.env` is
+   checked for well-formedness but its `CONFIG_*` values are never merged.
 3. Run `scripts/verify-module-list.sh`.
 4. Build with `DRY_RUN=1` first — it prints the merged config, the `make`
-   commands and the `find` commands without downloading anything.
+   commands and the `find` commands without downloading anything. The loader
+   has its own `DRY_RUN=1`, which prints each driver's declared
+   `DRIVER_LOAD_ORDER` with no built `.ko` files, so the order can be checked
+   without a build.
 
 If the family needs work the manifest cannot express, that is a signal to
 change this contract rather than to add a hook — see *What the contract does
@@ -67,7 +76,7 @@ Two things to notice. It declares no `CONFIG_USB`: `dvb` owns that key as `=y`,
 and restating a key you agree about is how a conflict gets manufactured. And
 the four chip drivers ship together — they are small, only the matching
 VID:PID ever binds, and carrying all four means no round trip to identify the
-cable; `lsusb` reports which one bound.
+cable; `lsusb -t` (or `dmesg`) reports which one bound.
 
 ## What the contract does not cover
 
@@ -80,7 +89,7 @@ described as data, add the hook then, and give it a per-driver lifetime.
 ## Verifying
 
 `scripts/verify-module-list.sh` checks every manifest is well-formed, POSIX-
-parseable, that `DRIVER_LOAD_ORDER ⊆ DRIVER_MODULES`, that no two enabled
-drivers disagree about a `CONFIG_*` value, and that every name in
-`.env.example`'s `DRIVERS=` exists. It warns about modules that are built but
-never loaded.
+parseable, that `DRIVER_LOAD_ORDER ⊆ DRIVER_MODULES`, that no two drivers in
+`.env.example`'s `DRIVERS=` set disagree about a `CONFIG_*` value, and that
+every name in that set exists. It warns about modules that are built but never
+loaded.
