@@ -350,9 +350,19 @@ the existing check rather than a new suite.
    the DVB path.
 3. **Config-merge conflicts** are a hard error naming both drivers. A driver
    declaring only what it owns (section 5.1) keeps the guard quiet.
-4. **First load is unverified.** `insmod ftdi_sio` can still fail if QTS's
-   kernel lacks something `usbserial` needs. That is a `dmesg` check on the
-   first run, not something this design can promise.
+4. **First load is unverified — and four of the five serial modules are
+   already on the target.** On the target NAS (QTS 5.2.9, kernel
+   `5.10.60-qnap`) QTS's **own** module path `/lib/modules/5.10.60-qnap/`
+   already ships `usbserial.ko`, `ftdi_sio.ko`, `pl2303.ko` and `cp210x.ko`;
+   `lsmod` shows `usbserial 40960 1 pl2303`, so they load and are in use. Only
+   **`ch341.ko`** is absent, and `ch341` is therefore the one module this
+   family actually delivers there. Two consequences to expect on the first
+   load: the loader's `insmod usbserial` will log a failure because QTS's copy
+   is already resident (cosmetic — the module is loaded either way), and if
+   `insmod ch341` fails, the cause is a symbol-CRC or vermagic mismatch
+   against QTS's own `usbserial`, **not** a missing dependency — `usbserial` is
+   QTS's and is in use. Still a `dmesg` check on the first run, not something
+   this design can promise.
 5. **A build is a superset.** With `DRIVERS="dvb usb-serial"` the loader loads a
    module that a given NAS was not built for as a logged "not found", not an
    error. Stated rather than discovered.
