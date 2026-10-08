@@ -22,7 +22,10 @@ drivers/media/v4l2-core drivers/media/common drivers/media/i2c"
 # v4l2-common.o is one object inside the =y videodev.o composite in
 # drivers/media/v4l2-core/Makefile. Both are built-in dependencies of the
 # modules that matter. Any =y symbol listed here would print [MISS] at collect.
-DRIVER_MODULES="em28xx em28xx-v4l2 em28xx-dvb si2168 si2157 dvb-usb tveeprom \
+# `em28xx-v4l`, not `em28xx-v4l2`: the object is em28xx-v4l.o —
+# `obj-$(CONFIG_VIDEO_EM28XX_V4L2) += em28xx-v4l.o` in
+# drivers/media/usb/em28xx/Makefile. No kernel emits em28xx-v4l2.ko.
+DRIVER_MODULES="em28xx em28xx-v4l em28xx-dvb si2168 si2157 dvb-usb tveeprom \
 tuner videobuf2-common videobuf2-memops videobuf2-v4l2 videobuf2-vmalloc"
 DRIVER_LOAD_ORDER="videobuf2-common videobuf2-memops videobuf2-v4l2 \
 videobuf2-vmalloc tuner tveeprom si2157 si2168 dvb-usb em28xx em28xx-dvb"

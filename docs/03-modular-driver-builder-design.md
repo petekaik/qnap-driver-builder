@@ -246,7 +246,7 @@ CONFIG_DVB_USB_V2=m CONFIG_DVB_TUNER_XC5000=m CONFIG_DVB_TUNER_DIB0070=m"
 DRIVER_DIRS="drivers/media/usb/em28xx drivers/media/dvb-frontends \
 drivers/media/tuners drivers/media/dvb-core drivers/media/usb/dvb-usb \
 drivers/media/v4l2-core drivers/media/common drivers/media/i2c"
-DRIVER_MODULES="em28xx em28xx-v4l2 em28xx-dvb si2168 si2157 dvb-usb tveeprom \
+DRIVER_MODULES="em28xx em28xx-v4l em28xx-dvb si2168 si2157 dvb-usb tveeprom \
 tuner videobuf2-common videobuf2-memops videobuf2-v4l2 videobuf2-vmalloc"
 DRIVER_LOAD_ORDER="videobuf2-common videobuf2-memops videobuf2-v4l2 \
 videobuf2-vmalloc tuner tveeprom si2157 si2168 dvb-usb em28xx em28xx-dvb"
@@ -337,12 +337,17 @@ the existing check rather than a new suite.
    them — were deleted rather than left to print `[MISS]` forever. The general
    form stands: any `=y` symbol listed in `DRIVER_MODULES` is uncollectible, and
    the build's `[MISS]` lines are what report it.
-2. **`em28xx-v4l2` is built and installed but never `insmod`ed** — it is in
-   `DRIVER_MODULES` and absent from `DRIVER_LOAD_ORDER`. It may be a genuine
-   missing load (if `em28xx-dvb` resolves symbols against it) or simply unused
-   for DVB. Assert 8 in section 8 surfaces it on every verifier run; deciding
-   whether to add it to the load order is a follow-up, because changing it
-   changes the DVB path.
+2. **`em28xx-v4l` is built and installed but never `insmod`ed** — it is in
+   `DRIVER_MODULES` and absent from `DRIVER_LOAD_ORDER`. (The object is
+   `em28xx-v4l.o`, from `obj-$(CONFIG_VIDEO_EM28XX_V4L2) += em28xx-v4l.o`; an
+   earlier draft called it `em28xx-v4l2`, a name no kernel emits.) It may be a
+   genuine missing load (if `em28xx-dvb` resolves symbols against it) or simply
+   unused for DVB. Evidence from the target NAS: `em28xx-v4l.ko` is present in
+   `/lib/modules/5.10.60-qnap/extra/` and `lsmod` does not list `em28xx_v4l`,
+   while both DVB adapters work — so not loading it is not what would break
+   DVB. Assert 8 still surfaces it on every verifier run; deciding whether to
+   add it to the load order remains a follow-up, because changing it changes
+   the DVB path.
 3. **Config-merge conflicts** are a hard error naming both drivers. A driver
    declaring only what it owns (section 5.1) keeps the guard quiet.
 4. **First load is unverified.** `insmod ftdi_sio` can still fail if QTS's

@@ -81,7 +81,7 @@ Modules produced, per family (each manifest's `DRIVER_MODULES`):
 
 | Driver | Modules |
 |---|---|
-| `dvb` | `em28xx` `em28xx-v4l2` `em28xx-dvb` `dvb-usb` `si2168` `si2157` `tuner` `tveeprom` `videobuf2-common` `videobuf2-memops` `videobuf2-v4l2` `videobuf2-vmalloc` |
+| `dvb` | `em28xx` `em28xx-v4l` `em28xx-dvb` `dvb-usb` `si2168` `si2157` `tuner` `tveeprom` `videobuf2-common` `videobuf2-memops` `videobuf2-v4l2` `videobuf2-vmalloc` |
 | `usb-serial` | `usbserial` `ftdi_sio` `ch341` `pl2303` `cp210x` |
 
 Modules are built by subtree and collected by name (`find … -name <mod>.ko`)
