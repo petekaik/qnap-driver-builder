@@ -90,19 +90,18 @@ scripts in `scripts/`, prose in `docs/`.
    hook — never bypass it with `git commit --no-verify`. It is a **user-level
    tool on `PATH` (`~/.local/bin/`), deliberately not vendored here**: every
    project needs the same check, so this repo keeps the rule, not the tool.
-9. **The NAS-side copy of this repo is a deploy target, not a mirror of it —
-   never `git pull` there.** (Where it lives is a machine-specific path, so it
-   is not written down here; item 8 applies.) The two trees are unrelated
-   histories that share one GitHub remote: both root at a commit titled "Initial
-   commit: QNAP DVB module builder for Hauppauge dualHD", but this repo's is
-   `21cbe31` and the NAS's is `829e11e`, which does not exist here. There is no
-   common ancestor to merge against, and the NAS checkout's `scripts/` held its
-   own working boot-persistence scripts that existed nowhere else. Deploy by
-   copying `scripts/`, `drivers/`, `modules/` and `firmware/`; that layer now
-   lives here (`scripts/qnap-install.sh`, `scripts/dvb-watchdog.sh`), so nothing
-   NAS-only is left to lose. **`drivers/` is not optional**: `lib-drivers.sh`
-   resolves manifests from `$DRIVER_ROOT/drivers`, so deploying `scripts/` alone
-   leaves the loader finding no manifests and silently loading nothing.
+9. **The NAS-side copy is a deploy target, not a clone — do not put a git
+   checkout there.** (Where it lives is a machine-specific path, so it is not
+   written down here; item 8 applies.) Only four paths are read at boot —
+   `scripts/`, `drivers/`, `modules/` and `firmware/` — and a `.deploy-manifest`
+   beside them records the commit they came from. **`drivers/` is not
+   optional**: `lib-drivers.sh` resolves manifests from `$DRIVER_ROOT/drivers`,
+   so deploying `scripts/` alone leaves the loader finding no manifests and
+   silently loading nothing. To update: copy those paths in, bump
+   `source-commit`, and re-run `scripts/qnap-install.sh` — idempotent, and the
+   repair step after a QTS update. Never `git pull` there: that tree holds the
+   builder's *output*, and giving it a history only creates a second thing to
+   keep in sync.
 
 ## Fixes applied, and what is left
 
@@ -126,9 +125,10 @@ Remaining limitations:
 - **`build_env.sh` has no guard on an unset `TMP_DIR`** — `_leave()` runs
   `rm -rf "$TMP_DIR"`. Harmless while it is empty (`rm -f`), but check callers
   before that variable ever gains a value.
-- **The build has not been run end-to-end from this tree.** Everything verified
-  here is syntax and internal consistency; the real proof is a build plus
-  `ls /dev/dvb` on the NAS.
+- **The boot path is still unverified.** The build has been run end to end
+  (18/18 modules) and deployed, and the modules load on demand; what is not yet
+  proven is that a reboot brings them back unattended. That proof is a reboot
+  followed by `ls /dev/dvb` and `ls /dev/ttyUSB0` on the NAS.
 
 ## Conventions
 
