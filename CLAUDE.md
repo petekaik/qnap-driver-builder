@@ -77,10 +77,10 @@ scripts in `scripts/`, prose in `docs/`.
 7. **Order matters in the loader.** `insmod` must run a module after everything
    it depends on, so each manifest declares its order in `DRIVER_LOAD_ORDER`; the
    DVB chain is `videobuf2-*` → `tuner` → `tveeprom` → `si2157` → `si2168` →
-   `dvb-usb` → `em28xx` → `em28xx-dvb`, and USB-serial is `usbserial` → chip
-   driver. The modules are outside the `depmod` search path until the loader has
-   installed them, so `modprobe` cannot resolve this for you — the declared order
-   is load-bearing.
+   `dvb-usb` → `em28xx` → `em28xx-rc` → `em28xx-dvb`, and USB-serial is
+   `usbserial` → chip driver. The modules are outside the `depmod` search path
+   until the loader has installed them, so `modprobe` cannot resolve this for
+   you — the declared order is load-bearing.
 8. **Nothing sensitive is publishable.** Credentials, usernames, passwords, IP
    addresses and machine-specific paths live in a gitignored `.env`; the public
    `.env.example` carries anonymised placeholders only, and scripts hardcode

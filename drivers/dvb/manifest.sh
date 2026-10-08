@@ -31,10 +31,10 @@ drivers/media/i2c drivers/media/usb/dvb-usb drivers/media/usb/em28xx"
 # `em28xx-v4l`, not `em28xx-v4l2`: the object is em28xx-v4l.o —
 # `obj-$(CONFIG_VIDEO_EM28XX_V4L2) += em28xx-v4l.o` in
 # drivers/media/usb/em28xx/Makefile. No kernel emits em28xx-v4l2.ko.
-DRIVER_MODULES="em28xx em28xx-v4l em28xx-dvb si2168 si2157 dvb-usb tveeprom \
-tuner videobuf2-common videobuf2-memops videobuf2-v4l2 videobuf2-vmalloc"
+DRIVER_MODULES="em28xx em28xx-v4l em28xx-dvb em28xx-rc si2168 si2157 dvb-usb \
+tveeprom tuner videobuf2-common videobuf2-memops videobuf2-v4l2 videobuf2-vmalloc"
 DRIVER_LOAD_ORDER="videobuf2-common videobuf2-memops videobuf2-v4l2 \
-videobuf2-vmalloc tuner tveeprom si2157 si2168 dvb-usb em28xx em28xx-dvb"
+videobuf2-vmalloc tuner tveeprom si2157 si2168 dvb-usb em28xx em28xx-rc em28xx-dvb"
 DRIVER_SEARCH_ROOTS="drivers/media"
 DRIVER_FIRMWARE="dvb-demod-si2168-b40-01.fw dvb-demod-si2168-d60-01.fw \
 dvb-demod-si2168-02.fw"
