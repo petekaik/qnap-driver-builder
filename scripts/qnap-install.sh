@@ -138,9 +138,12 @@ if [ ! -b "$CONFIG_PART" ]; then
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $CONFIG_PART is not a block device; skipping autorun.sh install"
 else
     # QNAP's busybox ash lacks `mountpoint`, so check via /proc/mounts.
+    MOUNTED_BY_US=0
     if ! grep -q " $FLASH_MNT " /proc/mounts 2>/dev/null; then
-        mount "$CONFIG_PART" "$FLASH_MNT" 2>/dev/null || \
-            mount -t ext2 "$CONFIG_PART" "$FLASH_MNT" 2>/dev/null
+        if mount "$CONFIG_PART" "$FLASH_MNT" 2>/dev/null || \
+           mount -t ext2 "$CONFIG_PART" "$FLASH_MNT" 2>/dev/null; then
+            MOUNTED_BY_US=1
+        fi
     fi
 
     if grep -q " $FLASH_MNT " /proc/mounts 2>/dev/null; then
@@ -170,9 +173,14 @@ EOF
             echo "[$(date '+%Y-%m-%d %H:%M:%S')] already enabled: Misc Autorun"
         fi
 
-        # Leave the flash partition unmounted and clean for the next boot.
-        umount "$FLASH_MNT" 2>/dev/null || \
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: failed to unmount $FLASH_MNT"
+        # Leave the flash partition as we found it — unmount only if this run
+        # mounted it. QTS may already have it mounted, and a module installer
+        # unmounting QTS's own config partition is a spectacular way to cause an
+        # outage. Same guard as dvb-watchdog.sh.
+        if [ "$MOUNTED_BY_US" -eq 1 ]; then
+            umount "$FLASH_MNT" 2>/dev/null || \
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: failed to unmount $FLASH_MNT"
+        fi
     else
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: could not mount $CONFIG_PART; skipping autorun.sh"
     fi

@@ -21,9 +21,11 @@ all on a locked-down QTS install.
 
 The manifests, scripts and configs are checked for syntax and internal
 consistency — `scripts/verify-module-list.sh` and `scripts/check-secrets.sh` run
-clean. The pipeline has **not** been run end to end from this tree yet; that
-proof is a build followed by `ls /dev/dvb` (and `ls /dev/ttyUSB0`) on the NAS.
-Treat the first run as the real test, and expect to adjust a manifest's
+clean. The pipeline has now been run end to end: the build produced all 18
+modules, and they were deployed to the NAS and `insmod`ed against the running
+kernel. What is **not** yet verified is the boot path — that the modules come
+back on their own after a reboot. That proof is a reboot followed by
+`ls /dev/dvb` (and `ls /dev/ttyUSB0`) on the NAS. Expect to adjust a manifest's
 `DRIVER_DIRS` if your kernel tree lays a subtree out differently.
 
 ## Project layout

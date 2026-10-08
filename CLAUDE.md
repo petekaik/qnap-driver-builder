@@ -94,9 +94,11 @@ scripts in `scripts/`, prose in `docs/`.
    `21cbe31` and the NAS's is `829e11e`, which does not exist here. There is no
    common ancestor to merge against, and the NAS checkout's `scripts/` held its
    own working boot-persistence scripts that existed nowhere else. Deploy by
-   copying `scripts/`, `modules/` and `firmware/`; that layer now lives here
-   (`scripts/qnap-install.sh`, `scripts/dvb-watchdog.sh`), so nothing NAS-only
-   is left to lose.
+   copying `scripts/`, `drivers/`, `modules/` and `firmware/`; that layer now
+   lives here (`scripts/qnap-install.sh`, `scripts/dvb-watchdog.sh`), so nothing
+   NAS-only is left to lose. **`drivers/` is not optional**: `lib-drivers.sh`
+   resolves manifests from `$DRIVER_ROOT/drivers`, so deploying `scripts/` alone
+   leaves the loader finding no manifests and silently loading nothing.
 
 ## Fixes applied, and what is left
 
