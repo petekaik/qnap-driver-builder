@@ -1,7 +1,7 @@
 # Modular driver builder — design
 
 **Date:** 2026-10-08
-**Status:** design approved in conversation; awaiting spec review
+**Status:** design approved; implementation plan in docs/04-modular-driver-builder-plan.md
 **Repo:** `qnap-driver-builder`
 
 ## 1. Why
@@ -44,8 +44,8 @@ The goal is that adding a driver family means **adding one file and one word to
 **Non-goals**
 
 - No device/multi-target abstraction. One `.env` per target NAS is enough.
-- No hook framework. A driver that needs custom build logic uses a documented
-  one-line escape hatch, not a plugin API.
+- No hook framework. A family is data; nothing today needs logic the manifest
+  cannot express.
 - No persistence or capture service for the serial console. Attaching is a
   manual operation (section 11).
 - No change to the boot-persistence model: QTS still wipes
@@ -73,7 +73,7 @@ docs/
   01-boot-and-persistence.md  reworded family-neutral
   02-dvb-host-contract.md     <- was 02-host-contract.md
   03-modular-driver-builder-design.md  this document
-  04-adding-a-driver.md       new: the manifest contract
+  05-adding-a-driver.md       new: the manifest contract
 README.md                     retitled "QNAP Driver Builder"
 CLAUDE.md                     invariants restated in manifest terms
 ```
@@ -97,11 +97,6 @@ and sources the same files.
 | `DRIVER_REQUIRES` | may be empty | Other driver names that must also be enabled. |
 
 Space-separated lists, not arrays: `for m in $DRIVER_MODULES` must work in ash.
-
-**Optional escape hatch.** A manifest may define `driver_extra_build()` or
-`driver_extra_collect()`. The builder calls them only if defined, via a single
-`declare -F` check. Nothing uses this today; it exists so the first driver that
-needs genuinely custom work does not force a framework.
 
 ### 5.1 Conventions
 
@@ -210,8 +205,9 @@ Docker and no kernel tree. Asserts:
 4. No module appears twice in `DRIVER_MODULES`, and `DRIVER_SEARCH_ROOTS` is
    non-empty whenever `DRIVER_MODULES` is. (Which root actually contains a
    given `.ko` cannot be known statically — that is the build's `[MISS]` line.)
-5. Each manifest passes both `sh -n` and `bash -n` — catches an accidental
-   bashism that would pass here and break under ash on the NAS.
+5. Each manifest passes `sh -n`, `bash -n`, and a grep for arrays, `[[`, and
+   `local`. `sh -n` alone is not sufficient: where `/bin/sh` is bash (macOS) a
+   bashism passes it and only breaks at boot under busybox ash on the NAS.
 6. Every name in `.env.example`'s `DRIVERS=` resolves to a real directory.
 7. No `CONFIG_*` key has conflicting values across enabled drivers.
 8. **Warning, not error:** modules collected but absent from every
@@ -363,5 +359,5 @@ the existing check rather than a new suite.
   plus `usbserial`, `ftdi_sio`, `ch341`, `pl2303`, `cp210x`.
 - On the NAS: `ls /dev/dvb` unchanged, and `ls /dev/ttyUSB0` appears after the
   serial cable is attached.
-- `docs/04-adding-a-driver.md` describes the contract, and adding a third
+- `docs/05-adding-a-driver.md` describes the contract, and adding a third
   driver is one new file plus one word in `.env`.

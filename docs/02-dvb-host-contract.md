@@ -41,7 +41,7 @@ Docker restarts the container.
 
 That 30 s window is a real deadline, not a formality: it is the reason the
 module load must complete inside container init. The `sleep 3` before `insmod`
-in `scripts/load-dvb.sh` exists to let USB enumeration finish first, and the
+in `scripts/load-modules.sh` exists to let USB enumeration finish first, and the
 watchdog cron in [`01-boot-and-persistence.md`](01-boot-and-persistence.md)
 Approach B is the only mechanism that would recover a tuner lost *after* that
 window.

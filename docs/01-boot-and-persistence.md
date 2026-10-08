@@ -15,7 +15,7 @@ QTS actively undoes this project's work in two ways. Both are handled here.
 So persistence needs two things: reinstall-and-reload at every boot, and a
 rebuild whenever the kernel version moves.
 
-## Approach A — `scripts/load-dvb.sh` (implemented)
+## Approach A — `scripts/load-modules.sh` (implemented)
 
 The loader in this repo. On every boot it:
 
@@ -24,10 +24,11 @@ The loader in this repo. On every boot it:
 2. refreshes any `firmware/*.fw` that is missing from `/lib/firmware` or older
    than the copy in the repo;
 3. sleeps 3 s so USB enumeration has a chance to finish, then `insmod`s each
-   module **in dependency order** — tuner before demod before bridge:
-   `videobuf2-*` → `tuner` → `tveeprom` → `si2157` → `si2168` → `dvb-usb` →
-   `em28xx` → `em28xx-dvb`;
-4. logs everything to `logs/dvb-boot.log` and finishes by listing `/dev/dvb`.
+   module; modules load in each driver's declared `DRIVER_LOAD_ORDER`; the DVB
+   chain is still `videobuf2-*` → `tuner` → `tveeprom` → `si2157` → `si2168` →
+   `dvb-usb` → `em28xx` → `em28xx-dvb`, and USB-serial is `usbserial` → chip
+   driver;
+4. logs everything to `logs/module-boot.log` and finishes by listing `/dev/dvb`.
 
 It derives the project root from its own location (`dirname "$0"/..`), so it
 works from wherever the repo is cloned, and it is idempotent — a module already
@@ -35,19 +36,23 @@ in `lsmod` is reported, not reloaded.
 
 `insmod` is used rather than `modprobe` because the modules are outside the
 `depmod` search path until step 1 has run; that is why the order is written out
-by hand. If you add a module, add it to the loop *and* to `MODULES_LIST` in
-`2_build_dvb.sh`, then run `scripts/verify-module-list.sh`.
+by hand. If you add a module, add it to its driver's manifest (`DRIVER_MODULES`
+and, if it must be loaded, `DRIVER_LOAD_ORDER`), then run
+`scripts/verify-module-list.sh`.
 
 ### Installing it
 
 Startup cron, in `/etc/config/crontab`:
 
 ```
-@reboot root /path/to/qnap-driver-builder/scripts/load-dvb.sh
+@reboot root /path/to/qnap-driver-builder/scripts/load-modules.sh
 ```
 
 then `/etc/init.d/crond.sh restart`. Alternatively QTS Control Panel → System →
-Hardware → Schedule → *Startup*. Verify on the next boot with:
+Hardware → Schedule → *Startup*. A crontab still pointing at
+`scripts/load-dvb.sh` keeps working through the shim, which `exec`s the new
+loader; delete the shim once every NAS has been repointed at
+`scripts/load-modules.sh`. Verify on the next boot with:
 
 ```sh
 lsmod | grep em28xx
@@ -66,7 +71,7 @@ this repo**:
 - a watchdog cron re-loads the modules if the adapter disappears later (a USB
   re-enumeration after a reset, for instance).
 
-It exists here only as a sketch, so treat the `scripts/load-dvb.sh` route as
+It exists here only as a sketch, so treat the `scripts/load-modules.sh` route as
 the supported one. The advantage it would add over Approach A is the watchdog —
 Approach A loads once and does not notice a tuner that drops off afterwards.
 
@@ -82,8 +87,8 @@ QTS release, and rebuild. The builder fetches the GPL source matching
 kernel and will not load.
 
 After rebuilding: copy the new `modules/*.ko` over the old ones, reinstall the
-firmware, and reload. `scripts/load-dvb.sh` does the install half of this on the
-next boot.
+firmware, and reload. `scripts/load-modules.sh` does the install half of this on
+the next boot.
 
 ## Verifying
 
