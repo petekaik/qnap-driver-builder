@@ -20,8 +20,9 @@ all on a locked-down QTS install.
 ## Status
 
 The manifests, scripts and configs are checked for syntax and internal
-consistency — `scripts/verify-module-list.sh` and `scripts/check-secrets.sh` run
-clean. The pipeline has now been run end to end: the build produced all 18
+consistency — `scripts/verify-module-list.sh` runs clean, as does
+`check-secrets.sh` (a user-level tool on `PATH`, shared across projects rather
+than vendored here). The pipeline has now been run end to end: the build produced all 18
 modules, and they were deployed to the NAS and `insmod`ed against the running
 kernel. What is **not** yet verified is the boot path — that the modules come
 back on their own after a reboot. That proof is a reboot followed by
@@ -47,8 +48,7 @@ back on their own after a reboot. That proof is a reboot followed by
 │   ├── load-dvb.sh           # shim that execs load-modules.sh (delete once repointed)
 │   ├── qnap-install.sh       # wires the loader into the boot path, idempotently
 │   ├── dvb-watchdog.sh       # 5-minute cron: recovers modules that drop off
-│   ├── verify-module-list.sh # asserts the manifests are well formed and agree
-│   └── check-secrets.sh      # keeps credentials/IPs/host paths out of commits
+│   └── verify-module-list.sh # asserts the manifests are well formed and agree
 ├── docs/
 │   ├── 01-boot-and-persistence.md  # keeping modules loaded across reboots and QTS updates
 │   ├── 02-dvb-host-contract.md     # what a consumer (TVHeadend) needs from the host

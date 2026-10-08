@@ -84,8 +84,10 @@ scripts in `scripts/`, prose in `docs/`.
 8. **Nothing sensitive is publishable.** Credentials, usernames, passwords, IP
    addresses and machine-specific paths live in a gitignored `.env`; the public
    `.env.example` carries anonymised placeholders only, and scripts hardcode
-   nothing. `scripts/check-secrets.sh` enforces this and is installed as a
-   pre-commit hook — never bypass it with `git commit --no-verify`.
+   nothing. `check-secrets.sh` enforces this and is installed as a pre-commit
+   hook — never bypass it with `git commit --no-verify`. It is a **user-level
+   tool on `PATH` (`~/.local/bin/`), deliberately not vendored here**: every
+   project needs the same check, so this repo keeps the rule, not the tool.
 9. **The NAS-side copy of this repo is a deploy target, not a mirror of it —
    never `git pull` there.** (Where it lives is a machine-specific path, so it
    is not written down here; item 8 applies.) The two trees are unrelated
@@ -138,10 +140,11 @@ Remaining limitations:
 - The tests are plain `sh` scripts with no framework, in `scripts/`:
   `verify-module-list.sh` asserts every manifest's `DRIVER_LOAD_ORDER` is a
   subset of its `DRIVER_MODULES` and that the enabled manifests agree on every
-  `CONFIG_*` value; `check-secrets.sh` asserts nothing sensitive is publishable.
-  Add an assert to one of them rather than introducing a suite. The end-to-end
-  "test" is a successful build plus `ls /dev/dvb` and a `dmesg` check on the NAS.
-- Run `scripts/check-secrets.sh --install` once per clone to hook the check into
+  `CONFIG_*` value; `check-secrets.sh` (user-level, not in this repo) asserts
+  nothing sensitive is publishable. Add an assert to one of them rather than
+  introducing a suite. The end-to-end "test" is a successful build plus
+  `ls /dev/dvb` and a `dmesg` check on the NAS.
+- Run `check-secrets.sh --install` once per clone to hook the check into
   `.git/hooks/pre-commit` (hooks are local, so this is not automatic). Run it by
   hand before publishing anything. When a legitimate placeholder trips it, mark
   the line with a trailing `secretscan:ignore` comment rather than loosening the

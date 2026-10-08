@@ -70,7 +70,6 @@ scripts/
   qnap-install.sh             new here: was NAS-only, see section 10
   dvb-watchdog.sh             new here: was NAS-only, see section 10
   verify-module-list.sh       manifest-aware
-  check-secrets.sh            unchanged
 docs/
   01-boot-and-persistence.md  reworded family-neutral
   02-dvb-host-contract.md     <- was 02-host-contract.md
@@ -358,8 +357,9 @@ Per repository convention: plain `sh` scripts, no framework, asserts added to
 the existing check rather than a new suite.
 
 - `scripts/verify-module-list.sh` — the eight asserts in section 8.
-- `scripts/check-secrets.sh` — unchanged; the new spec and manifests must pass
-  it before commit.
+- `check-secrets.sh` — a user-level tool on `PATH` (`~/.local/bin/`), shared
+  across projects and deliberately not vendored here; the new spec and manifests
+  must pass it before commit.
 - Syntax before commit: `bash -n` on shell, `sh -n` on manifests and POSIX
   scripts, `python3 -m py_compile` on `apply_configs.py`.
 - The end-to-end test is unchanged and is the real one: a build, then on the
@@ -441,7 +441,7 @@ the existing check rather than a new suite.
 ## 13. Definition of done
 
 - `scripts/verify-module-list.sh` passes with both manifests present.
-- `scripts/check-secrets.sh` passes on the committed tree.
+- `check-secrets.sh` passes on the committed tree.
 - A build with `DRIVERS="dvb usb-serial"` produces the DVB module set unchanged
   plus `usbserial`, `ftdi_sio`, `ch341`, `pl2303`, `cp210x`.
 - On the NAS: `ls /dev/dvb` unchanged, and `ls /dev/ttyUSB0` appears after the

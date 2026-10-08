@@ -17,7 +17,7 @@
 - **`DRIVER_LOAD_ORDER` ⊆ `DRIVER_MODULES`**, per driver (design invariant 5). Order is **declared, not derived** (invariant 7).
 - **DVB behaviour must not change.** After the restructure the DVB family must still declare exactly: 31 `CONFIG_*` entries, 8 dirs, 14 modules, 11 load-order entries, 3 firmware files.
 - **`.env` paths are container-absolute** (`/build/…`) and `.env` must never be added to `.dockerignore` (invariants 2 and 3). `.env` is gitignored; `.env.example` carries anonymised placeholders only (invariant 8).
-- **Nothing sensitive is publishable.** Run `sh scripts/check-secrets.sh` before every commit. The repo has it installed as a pre-commit hook — **never bypass it with `git commit --no-verify`**.
+- **Nothing sensitive is publishable.** Run `check-secrets.sh` before every commit. The repo has it installed as a pre-commit hook — **never bypass it with `git commit --no-verify`**.
 - **Syntax-check before every commit:** `bash -n` on bash, `sh -n` on POSIX scripts and manifests, `python3 -m py_compile` on Python.
 - Tests are plain `sh` scripts in `scripts/`, no framework. Add asserts to the existing check rather than introducing a suite.
 - Commits end with `Co-Authored-By: Claude Code <noreply@anthropic.com>`.
@@ -479,7 +479,7 @@ Expected: `syntax OK`.
 
 - [ ] **Step 17: Run the secrets check**
 
-Run: `sh scripts/check-secrets.sh`
+Run: `check-secrets.sh`
 Expected: `OK: nothing publishable in ...`, exit 0.
 
 - [ ] **Step 18: Commit**
@@ -622,7 +622,7 @@ Expected: both the original `# CONFIG_DVB_USB is not set` line and a new `CONFIG
 
 - [ ] **Step 8: Syntax-check and run the secrets check**
 
-Run: `python3 -m py_compile apply_configs.py && sh scripts/check-secrets.sh`
+Run: `python3 -m py_compile apply_configs.py && check-secrets.sh`
 Expected: `OK: nothing publishable in ...`.
 
 - [ ] **Step 9: Commit**
@@ -932,7 +932,7 @@ Expected: only `usb-serial` listed; 5 CONFIG tokens; `make ARCH=x86_64 M=drivers
 ```sh
 test ! -f .env || { echo "ERROR: test .env left behind — rm -f .env" >&2; exit 1; }
 bash -n 2_build_modules.sh 0_prepare.sh && sh -n docker_entrypoint.sh \
-  && sh scripts/verify-module-list.sh >/dev/null && sh scripts/check-secrets.sh
+  && sh scripts/verify-module-list.sh >/dev/null && check-secrets.sh
 ```
 
 `0_prepare.sh` is a bash script (its env block uses `$'…'`), so it gets `bash -n`, not `sh -n`. Expected: `OK: nothing publishable in ...`. The first line is a guard, not a formality: a `.env` left in the tree is the invariant-2 hazard described in step 10.
@@ -1319,7 +1319,7 @@ Treat the expectation as a **rule, not a list**, because a list would contradict
 
 Run:
 ```sh
-sh scripts/verify-module-list.sh && sh scripts/check-secrets.sh && sh -n scripts/*.sh && bash -n 2_build_modules.sh build_env.sh docker_entrypoint.sh 0_prepare.sh && python3 -m py_compile apply_configs.py && echo "ALL OK"
+sh scripts/verify-module-list.sh && check-secrets.sh && sh -n scripts/*.sh && bash -n 2_build_modules.sh build_env.sh docker_entrypoint.sh 0_prepare.sh && python3 -m py_compile apply_configs.py && echo "ALL OK"
 ```
 Expected: `ALL OK`. The verifier prints its three built-but-never-loaded warnings; that is expected until the `dvb-core`/`v4l2-common` question is settled by a build.
 
