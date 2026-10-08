@@ -97,11 +97,15 @@ scripts in `scripts/`, prose in `docs/`.
    beside them records the commit they came from. **`drivers/` is not
    optional**: `lib-drivers.sh` resolves manifests from `$DRIVER_ROOT/drivers`,
    so deploying `scripts/` alone leaves the loader finding no manifests and
-   silently loading nothing. To update: copy those paths in, bump
-   `source-commit`, and re-run `scripts/qnap-install.sh` — idempotent, and the
-   repair step after a QTS update. Never `git pull` there: that tree holds the
-   builder's *output*, and giving it a history only creates a second thing to
-   keep in sync.
+   silently loading nothing. To update: run `scripts/deploy-to-nas.sh` from the
+   build host — it rsyncs those paths, rewrites `source-commit` from the current
+   `HEAD`, and re-verifies by sha256 — then re-run `scripts/qnap-install.sh` if
+   the boot path itself changed (idempotent, and the repair step after a QTS
+   update). The deploy script reads its target from `DEPLOY_HOST`/`DEPLOY_DIR` in
+   `.env` (item 8), syncs `firmware/` without `--delete` because the NAS may hold
+   the only copy, and loads nothing, so it is safe mid-recording. Never `git pull`
+   there: that tree holds the builder's *output*, and giving it a history only
+   creates a second thing to keep in sync.
 
 ## Fixes applied, and what is left
 

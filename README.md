@@ -48,6 +48,7 @@ back on their own after a reboot. That proof is a reboot followed by
 │   ├── load-dvb.sh           # shim that execs load-modules.sh (delete once repointed)
 │   ├── qnap-install.sh       # wires the loader into the boot path, idempotently
 │   ├── dvb-watchdog.sh       # 5-minute cron: recovers modules that drop off
+│   ├── deploy-to-nas.sh      # pushes the boot-path payload to a separate NAS
 │   └── verify-module-list.sh # asserts the manifests are well formed and agree
 ├── docs/
 │   ├── 01-boot-and-persistence.md  # keeping modules loaded across reboots and QTS updates
@@ -153,6 +154,24 @@ The boot loader, `scripts/load-modules.sh`, does the install half of this on
 every boot (see *Surviving reboots*). Once a USB-TTL cable is attached,
 `ls /dev/ttyUSB0` is what the `usb-serial` family adds — `dmesg` names which
 chip bound.
+
+### Building here, deploying there
+
+The build wants ~10 GB and a Docker host; the NAS wants neither. When they are
+different machines, only four paths ever need to cross — the ones the boot path
+reads:
+
+```bash
+# .env: DEPLOY_HOST (an ssh destination) and DEPLOY_DIR (the NAS-side path)
+sh scripts/deploy-to-nas.sh --dry-run    # report what would change
+sh scripts/deploy-to-nas.sh              # rsync, rewrite .deploy-manifest, verify
+```
+
+It syncs `scripts/`, `drivers/` and `modules/` with `--delete`, rewrites
+`.deploy-manifest` with the current commit, then re-checks every file by sha256.
+`firmware/` is the exception: it is not vendored here, so the NAS usually holds
+the only copy, and the script only ever pushes it — never deletes there. It
+loads nothing, so a `.ko` already in memory keeps running until the next reboot.
 
 ## Firmware
 
