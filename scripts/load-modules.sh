@@ -6,7 +6,28 @@
 # root is auto-detected from this script's location.
 #
 # DRY_RUN=1 prints what it would do without touching /lib/modules.
-PROJECT_DIR=$(cd "$(dirname "$0")/.." && pwd)
+#
+# Exit codes 1/2/3 are what dvb-watchdog.sh keys off, so they are part of the
+# contract, not decoration.
+#
+# Resolve the real script location even when invoked through a symlink. QNAP
+# runs the boot loader as /etc/init.d/dvb-loader.sh, a symlink to this file, so
+# a plain `dirname "$0"` would resolve PROJECT_DIR to /etc, find no manifests
+# and silently load nothing. busybox ash has no `readlink -f`, hence the walk.
+_realpath() {
+    _p=$1
+    while [ -L "$_p" ]; do
+        _dir=$(dirname "$_p")
+        _target=$(readlink "$_p")
+        case "$_target" in
+            /*) _p="$_target" ;;
+            *)  _p="$_dir/$_target" ;;
+        esac
+    done
+    printf '%s\n' "$_p"
+}
+
+PROJECT_DIR=$(cd "$(dirname "$(_realpath "$0")")/.." && pwd)
 DRIVER_ROOT="$PROJECT_DIR"
 . "$PROJECT_DIR/scripts/lib-drivers.sh"
 MODULE_DIR="/lib/modules/$(uname -r)/extra"
@@ -55,8 +76,13 @@ for m in $(driver_list_manifests); do
     done
 done
 
-# Make sure USB devices have enumerated before loading drivers.
-[ "$DRY_RUN" = "1" ] || sleep 3
+# Make sure USB devices have enumerated before loading drivers. This is a real
+# race, not politeness: loading em28xx before the dualHD enumerates produces a
+# phantom /dev/dvb0 that disappears a second later. The predecessor loader
+# waited on lsusb matching the tuner, which is device-specific and this loader
+# is not, so it is a tunable delay instead.
+USB_SETTLE="${USB_SETTLE:-3}"
+[ "$DRY_RUN" = "1" ] || sleep "$USB_SETTLE"
 
 # Load modules in each driver's declared order. Kernel module names use
 # underscores while the compiled files use dashes, so map filename -> loaded
@@ -67,6 +93,7 @@ done
 # reason as in the install block: it must print the whole declared order even
 # when no .ko has been built yet, which is the only way to verify the order
 # on a development machine.
+load_failures=0
 for m in $(driver_list_manifests); do
     driver_source "$m" || continue
     driver_validate || {
@@ -88,7 +115,10 @@ for m in $(driver_list_manifests); do
             echo "[$(date '+%Y-%m-%d %H:%M:%S')] Module already loaded: $mod"
         else
             echo "[$(date '+%Y-%m-%d %H:%M:%S')] Loading module: $mod"
-            insmod "${MODULE_DIR}/${mod}.ko" 2>&1 || echo "WARN: failed to load $mod"
+            insmod "${MODULE_DIR}/${mod}.ko" 2>&1 || {
+                echo "WARN: failed to load $mod"
+                load_failures=$((load_failures + 1))
+            }
         fi
     done
 done
@@ -99,5 +129,12 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] DVB adapters:"
 ls -la /dev/dvb 2>&1 || echo "No /dev/dvb found"
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Serial ports:"
 ls -la /dev/ttyUSB* 2>&1 || echo "No /dev/ttyUSB* found"
+
+if [ "$load_failures" -gt 0 ]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Done with $load_failures module(s) failed to load"
+    # 0 healthy / 1 no modules to install / 2 load failed. The watchdog acts on
+    # these, so a run that silently loaded nothing must not report success.
+    exit 2
+fi
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Done"

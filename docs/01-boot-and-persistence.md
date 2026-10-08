@@ -43,38 +43,61 @@ and, if it must be loaded, `DRIVER_LOAD_ORDER`), then run
 
 ### Installing it
 
-Startup cron, in `/etc/config/crontab`:
-
-```
-@reboot root /path/to/qnap-driver-builder/scripts/load-modules.sh
-```
-
-then `/etc/init.d/crond.sh restart`. Alternatively QTS Control Panel → System →
-Hardware → Schedule → *Startup*. A crontab still pointing at
-`scripts/load-dvb.sh` keeps working through the shim, which `exec`s the new
-loader; delete the shim once every NAS has been repointed at
-`scripts/load-modules.sh`. Verify on the next boot with:
+`scripts/qnap-install.sh` wires the loader into the boot path. Run it once on
+the NAS, from the checkout's root:
 
 ```sh
-lsmod | grep em28xx
-ls /dev/dvb
-dmesg | tail -20 | grep -E 'em28xx|si2168|si2157'
+cd /path/to/qnap-driver-builder    # wherever the repo lives on the NAS
+scripts/qnap-install.sh
 ```
 
-## Approach B — QNAP `autorun.sh` + `/etc/rcS.d/` + watchdog (design sketch)
+It derives every path from its own location, so the checkout can live anywhere.
 
-An alternative recorded during the `pvr-tvhd` investigation, **not implemented in
-this repo**:
+It is idempotent, and re-running it is the repair step after any QTS update that
+loses the boot path. It installs three layers, least durable first, so a
+firmware update has to destroy all three to stop the modules loading:
 
-- `autorun.sh` on a data volume is QNAP's supported hook that runs at boot;
-- a `/etc/rcS.d/S98dvb-loader` init script gives the load a place in the boot
-  ordering rather than racing USB enumeration;
-- a watchdog cron re-loads the modules if the adapter disappears later (a USB
-  re-enumeration after a reset, for instance).
+| Layer | Path | Survives |
+|---|---|---|
+| boot ordering | `/etc/init.d/dvb-loader.sh` → `scripts/load-modules.sh`, and `/etc/rcS.d/S98dvb-loader` → that | normal reboots; `S98` runs before QNAP's own `S99` services |
+| watchdog | `/etc/config/user_cmd/dvb-watchdog.cron`, every 5 minutes | firmware updates that wipe `/etc/rcS.d` or `/etc/init.d` |
+| flash autorun | `/tmp/config/autorun.sh` on the boot flash, plus `Misc Autorun=TRUE` via `setcfg` | firmware updates, because it lives on the flash partition |
 
-It exists here only as a sketch, so treat the `scripts/load-modules.sh` route as
-the supported one. The advantage it would add over Approach A is the watchdog —
-Approach A loads once and does not notice a tuner that drops off afterwards.
+The installed names say `dvb` for history: they are what the NAS already has,
+and renaming a live boot path to gain tidiness risks a dangling symlink and a
+silent loss of load-on-boot. What they point at is family-neutral.
+
+QTS Control Panel → System → Hardware → Schedule → *Startup* is an alternative
+to the rcS link. A crontab still pointing at `scripts/load-dvb.sh` keeps working
+through the shim, which `exec`s the new loader; delete the shim once every NAS
+has been repointed.
+
+Verify on the next boot with:
+
+```sh
+lsmod | grep -E 'em28xx|ftdi_sio'
+ls /dev/dvb /dev/ttyUSB*
+tail -20 logs/module-boot.log
+```
+
+## Approach B — rcS + `autorun.sh` + watchdog (implemented)
+
+Approach A alone loads once at boot and does not notice a device that drops off
+afterwards — a USB re-enumeration after a reset, or a QTS update that wipes the
+boot path. Approach B adds recovery and is what `qnap-install.sh` installs:
+
+- `/etc/rcS.d/S98dvb-loader` gives the load a place in the boot ordering rather
+  than racing USB enumeration;
+- `scripts/dvb-watchdog.sh` runs every 5 minutes, exits silently while the health
+  path exists, and otherwise re-runs the installer and then the loader, so a QTS
+  update that wipes the boot path heals without a reboot;
+- `autorun.sh` on the flash partition is the most durable hook, and the one a QTS
+  firmware update is least likely to remove.
+
+The loader's exit codes are the watchdog's signal: `0` loaded, `1` nothing to
+install, `2` at least one `insmod` failed. A loader that reported success after
+loading nothing would make the watchdog worthless, so those codes are a
+contract, not decoration.
 
 ## Rebuilding after a QTS update
 

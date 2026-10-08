@@ -43,6 +43,8 @@ Treat the first run as the real test, and expect to adjust a manifest's
 │   ├── lib-drivers.sh        # manifest loading, validation and config merging
 │   ├── load-modules.sh       # boot loader: reinstall + insmod modules, sync firmware
 │   ├── load-dvb.sh           # shim that execs load-modules.sh (delete once repointed)
+│   ├── qnap-install.sh       # wires the loader into the boot path, idempotently
+│   ├── dvb-watchdog.sh       # 5-minute cron: recovers modules that drop off
 │   ├── verify-module-list.sh # asserts the manifests are well formed and agree
 │   └── check-secrets.sh      # keeps credentials/IPs/host paths out of commits
 ├── docs/
@@ -172,20 +174,25 @@ Two things QTS undoes for you:
 
 - **`/lib/modules/<version>/extra` does not survive a reboot.** Re-install the
   modules and reload them at startup. QTS has no module autoload for custom
-  drivers, so `scripts/load-modules.sh` runs from a startup cron entry
-  (`@reboot` in `/etc/config/crontab`, then `/etc/init.d/crond.sh restart`) or
-  from Control Panel → System → Hardware → Schedule → *Startup*. It reinstalls
+  drivers, so `scripts/load-modules.sh` runs from the boot path. It reinstalls
   `modules/*.ko`, syncs `firmware/*.fw` into `/lib/firmware`, and `insmod`s
   everything in each driver's declared load order, logging to
   `logs/module-boot.log`.
+
+  Run **`scripts/qnap-install.sh`** once on the NAS to wire that up; it is
+  idempotent, and re-running it is the repair step after a QTS update that
+  loses the boot path. It installs an `/etc/rcS.d` boot hook, a 5-minute
+  watchdog cron, and a flash `autorun.sh`, so no single QTS update can stop
+  the modules loading. A crontab or Control Panel *Startup* entry pointing at
+  `scripts/load-modules.sh` also works if you prefer to wire it by hand.
 - **A QTS firmware update can change the kernel version** and wipe firmware.
   Custom modules are kernel-version-locked: load an old `.ko` on a new kernel
   and you get `Invalid module format`. After a major QTS update, set `QNAP_VER`
   in `.env` to the new version, rebuild, and reinstall.
 
-`scripts/load-modules.sh` is one of two ways to keep the tuner alive across a
-reboot — the other is a QNAP `autorun.sh` + `/etc/rcS.d/` loader with a watchdog
-cron. Both are described in
+The loader loads once at boot; the watchdog installed alongside it notices a
+tuner that drops off afterwards. Both, and the three layers `qnap-install.sh`
+wires up, are described in
 [`docs/01-boot-and-persistence.md`](docs/01-boot-and-persistence.md).
 
 ## Feeding Tvheadend

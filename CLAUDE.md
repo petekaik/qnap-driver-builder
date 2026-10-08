@@ -86,6 +86,17 @@ scripts in `scripts/`, prose in `docs/`.
    `.env.example` carries anonymised placeholders only, and scripts hardcode
    nothing. `scripts/check-secrets.sh` enforces this and is installed as a
    pre-commit hook — never bypass it with `git commit --no-verify`.
+9. **The NAS-side copy of this repo is a deploy target, not a mirror of it —
+   never `git pull` there.** (Where it lives is a machine-specific path, so it
+   is not written down here; item 8 applies.) The two trees are unrelated
+   histories that share one GitHub remote: both root at a commit titled "Initial
+   commit: QNAP DVB module builder for Hauppauge dualHD", but this repo's is
+   `21cbe31` and the NAS's is `829e11e`, which does not exist here. There is no
+   common ancestor to merge against, and the NAS checkout's `scripts/` held its
+   own working boot-persistence scripts that existed nowhere else. Deploy by
+   copying `scripts/`, `modules/` and `firmware/`; that layer now lives here
+   (`scripts/qnap-install.sh`, `scripts/dvb-watchdog.sh`), so nothing NAS-only
+   is left to lose.
 
 ## Fixes applied, and what is left
 

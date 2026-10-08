@@ -67,6 +67,8 @@ scripts/
   lib-drivers.sh              new: manifest loading and merge/conflict helpers
   load-modules.sh             <- was load-dvb.sh
   load-dvb.sh                 one-line shim -> load-modules.sh (see section 10)
+  qnap-install.sh             new here: was NAS-only, see section 10
+  dvb-watchdog.sh             new here: was NAS-only, see section 10
   verify-module-list.sh       manifest-aware
   check-secrets.sh            unchanged
 docs/
@@ -320,6 +322,36 @@ Two mitigations, both cheap and both required:
 Nothing else on the NAS moves: same `modules/`, same `firmware/`, same
 `/lib/modules/<version>/extra`. Add `DRIVERS=...` to the host `.env`
 (gitignored) before rebuilding.
+
+### 10.1 The NAS checkout is a deploy target, not a mirror
+
+Found late, and it explains a long detour: the checkout on the NAS is
+**not a clone of this repo and cannot be fast-forwarded to it**. (Its exact
+path is machine-specific and deliberately not recorded here.) Both trees root
+at a commit titled *"Initial commit: QNAP DVB module builder for Hauppauge
+dualHD"* — this repo at `21cbe31`, the NAS at `829e11e` — and the NAS's object
+does not exist in this repo at all. They are two unrelated histories that happen
+to share one GitHub remote.
+
+The boot-persistence layer made this worse rather than causing it:
+`qnap-install.sh`, `dvb-watchdog.sh` and the NAS's `dvb-loader.sh` had been
+written **directly on the NAS**, untracked, and never came back here, while this
+repo meanwhile took `scripts/` as a tracked path. The same directory name held
+two different things, so every "just update the NAS" idea collided with a
+working script that existed nowhere else.
+
+Both are settled now. The persistence layer is tracked here (section 4), and the
+NAS side is deployed by copying `scripts/`, `modules/` and `firmware/` — never
+by `git pull`, which has no common ancestor to merge with. `dvb-loader.sh` is
+deliberately **not** carried over: `load-modules.sh` supersedes it, since it
+hardcoded the module list that the manifests now own. Two things it had that
+`load-modules.sh` did not were ported instead: symlink-safe `PROJECT_DIR`
+resolution and real exit codes. A third, its wait for `lsusb` to show the tuner,
+was dropped — the match is device-specific and the loader is not — and became a
+`USB_SETTLE` delay whose default is the old fixed 3 s. The symlink resolution is
+the load-bearing one: QTS runs the loader through `/etc/init.d/dvb-loader.sh`,
+where a plain `dirname "$0"` resolves `PROJECT_DIR` to `/etc` and the loader
+finds no manifests and silently loads nothing.
 
 ## 11. Testing
 
