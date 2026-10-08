@@ -674,8 +674,18 @@ In `0_prepare.sh`, add the driver list to the generated env block, immediately a
 
 ```
 # Driver families to build, by manifest directory name under drivers/
-DRIVERS="dvb usb-serial"
+DRIVERS=\\\"dvb usb-serial\\\"
 ```
+
+The backslashes are not decoration. Every line of that block is passed through `eval echo` before it is written to `.env`, which strips unprotected quotes: written plainly, `DRIVERS="dvb usb-serial"` lands in `.env` as `DRIVERS=dvb usb-serial`, and sourcing that line *runs* `usb-serial` as a command — `command not found`, exit 127 — instead of setting the variable. Under `build_env.sh`'s `set -e` that aborts the build. The escaped form round-trips to a properly quoted line.
+
+Verify it rather than assuming it:
+
+```sh
+./0_prepare.sh && sh -c 'set -eu; . ./.env; echo "DRIVERS=[$DRIVERS]"'
+```
+
+Expected: `DRIVERS=[dvb usb-serial]` and exit 0. Then remove the file it just wrote — see step 10.
 
 - [ ] **Step 3: Confirm the builder still refers to the removed patcher**
 
@@ -769,7 +779,7 @@ print_build_plan() {
 
 Open `2_build_modules.sh` and find `function build() {`. Make exactly three changes to it, and touch nothing else:
 
-**(a)** Insert immediately after `pushd "$SRC_DIR"`:
+**(a)** Insert at the very top of `build()`, **before** the existing `pushd "$SRC_DIR"` line — which stays where it is, immediately after this block:
 
 ```bash
     local manifests
@@ -781,10 +791,14 @@ Open `2_build_modules.sh` and find `function build() {`. Make exactly three chan
 
     if [ "$DRY_RUN" = "1" ]; then
         print_build_plan "$manifests" || return 1
-        popd
         return 0
     fi
 ```
+
+Two things about the placement, neither of them cosmetic:
+
+- **Before the download, not after it.** Resolving first means a typo'd driver name fails in the first second instead of after a 90-minute download, which is what step 11 is testing. It also means `DRY_RUN=1` needs neither `$SRC_DIR` nor the GPL tree to exist — the whole point of a dry run, and the same reasoning as the ruling that Task 4's dry run must not require `modules/` to be populated. Resolving before the `pushd` is safe: `driver_load_enabled` resolves through the absolute `$DRIVER_ROOT`, so it does not care about the cwd.
+- **No `popd` in the dry-run branch.** Nothing has been pushed at that point. `build()`'s two `popd`s at the tail stay paired with `pushd "$SRC_DIR"` and `pushd "$KERNEL_DIR"`; a third `popd` here would pop the `$BASE_DIR` push made by `build_env.sh`'s `_enter` and leave `_leave` unbalanced.
 
 **(b)** Leave the whole GPL download/extract block — from `if [[ ! -d "$QNAP_DIR" ]]; then` through the closing `fi` — **exactly as it is**. Do not retype it and do not reformat it; it works and nothing about it is driver-specific.
 
@@ -853,56 +867,81 @@ Expected: no output. A hit means either a stale comment (reword it) or a driver 
 
 - [ ] **Step 10: Test the plan printer with both drivers (Review Focus item 6)**
 
-The builder needs a `.env` to source; the one in this checkout is gitignored. If it is absent, copy the template first — `.env.example` already holds container-absolute paths, which is what the script expects.
+The builder needs a `.env` to source; the one in this checkout is gitignored and absent. **Do not seed it from `.env.example`** — those paths are container-absolute, and this test runs on the host. `build_env.sh` pushes to `$BASE_DIR` and the script sources `$BASE_DIR/scripts/lib-drivers.sh`, so `$BASE_DIR` has to be the checkout root here; with `BASE_DIR=/build` the run dies at the first `pushd`. The repo's own `0_prepare.sh` derives `BASE_DIR` from its own location, which is exactly the host-path `.env` this test needs — and running it also exercises the step-2 change:
 
-Run:
 ```sh
-[ -f .env ] || cp .env.example .env
+./0_prepare.sh
 DRY_RUN=1 ./2_build_modules.sh build
 ```
+
 Expected: `Enabled drivers (dvb usb-serial):` listing both with their descriptions; the 36 merged CONFIG tokens (31 DVB + 5 serial); a `make ARCH=x86_64 M=drivers/media/usb/em28xx   # [dvb]` line and a `make ARCH=x86_64 M=drivers/usb/serial   # [usb-serial]` line; then the collect section, where the `dvb-core` entry appears as `find drivers/media -name dvb-core.ko -print -quit   # [dvb]`. No download, no `make`, exit 0.
+
+Leave that `.env` in place for steps 11–14, then **remove it**: `rm -f .env`. It is gitignored, but the Dockerfile copies `.env` into the build context, so a leftover host-path `.env` is the exact way to get a build that silently cannot find the kernel tree. Restore the initial state before committing.
 
 Note what this test *cannot* show: whether that `find` will actually locate `dvb-core.ko`. Under `CONFIG_DVB_CORE=y` it will not — `[MISS]`, Review Focus item 6 — and the plan printer deliberately shows the command rather than predicting its result. Only a real build settles open item 1.
 
 - [ ] **Step 11: Test an unknown driver name fails loudly (Review Focus item 1)**
 
-Run: `DRY_RUN=1 DRIVERS="dvb nosuch" ./2_build_modules.sh build; echo "exit=$?"`
+`DRIVERS="dvb nosuch" ./2_build_modules.sh` will **not** work: `build_env.sh` sources `.env` after the environment is set, and that assignment overwrites the one you passed in. Change the value where the script actually reads it — in `.env` — and put it back afterwards:
+
+```sh
+set_drivers() { sed "s|^DRIVERS=.*|DRIVERS=\"$1\"|" .env > .env.tmp && mv .env.tmp .env; }
+set_drivers "dvb nosuch"
+DRY_RUN=1 ./2_build_modules.sh build; echo "exit=$?"
+set_drivers "dvb usb-serial"
+```
+
 Expected: `unknown driver 'nosuch'. Available: dvb usb-serial` and a non-zero exit. This must not proceed to build a subset — a typo'd plugin name silently dropping a driver is the failure mode this guards.
 
 - [ ] **Step 12: Test an empty `DRIVERS` fails loudly (Review Focus item 3)**
 
-Run: `DRY_RUN=1 DRIVERS="" ./2_build_modules.sh build; echo "exit=$?"`
+```sh
+set_drivers ''
+DRY_RUN=1 ./2_build_modules.sh build; echo "exit=$?"
+set_drivers "dvb usb-serial"
+```
+
 Expected: `DRIVER is empty: set DRIVERS= in .env (see .env.example)` and a non-zero exit. Silently building zero modules would look like success.
 
 - [ ] **Step 13: Test a config conflict stops the build (Review Focus item 4)**
 
-Run:
+Unlike `DRIVERS`, the manifest is read directly, so editing it does take effect. Use the job's scratch directory rather than a fixed `/tmp` path:
+
 ```sh
-sh -c 'cp drivers/usb-serial/manifest.sh /tmp/m.orig && sed "s/^DRIVER_CONFIGS=\"CONFIG_USB_SERIAL=m/DRIVER_CONFIGS=\"CONFIG_USB=y CONFIG_USB_SERIAL=m/" /tmp/m.orig > drivers/usb-serial/manifest.sh && DRY_RUN=1 ./2_build_modules.sh build; echo "exit=$?"; cp /tmp/m.orig drivers/usb-serial/manifest.sh'
+sh -c 't="$CLAUDE_JOB_DIR/tmp/m.orig"; cp drivers/usb-serial/manifest.sh "$t" && sed "s/^DRIVER_CONFIGS=\"CONFIG_USB_SERIAL=m/DRIVER_CONFIGS=\"CONFIG_USB=y CONFIG_USB_SERIAL=m/" "$t" > drivers/usb-serial/manifest.sh && DRY_RUN=1 ./2_build_modules.sh build; echo "exit=$?"; cp "$t" drivers/usb-serial/manifest.sh'
 ```
 Expected: `CONFIG conflict on CONFIG_USB: 'dvb' declares CONFIG_USB=y, 'usb-serial' declares CONFIG_USB=y` — no wait, the value *matches* (`y`), so this must **pass**. That is the point of Review Focus item 4's sibling: agreement is silent. To see the failure, change the injected value to `m`:
 ```sh
-sh -c 'cp drivers/usb-serial/manifest.sh /tmp/m.orig && sed "s/^DRIVER_CONFIGS=\"CONFIG_USB_SERIAL=m/DRIVER_CONFIGS=\"CONFIG_USB=m CONFIG_USB_SERIAL=m/" /tmp/m.orig > drivers/usb-serial/manifest.sh && DRY_RUN=1 ./2_build_modules.sh build; echo "exit=$?"; cp /tmp/m.orig drivers/usb-serial/manifest.sh'
+sh -c 't="$CLAUDE_JOB_DIR/tmp/m.orig"; cp drivers/usb-serial/manifest.sh "$t" && sed "s/^DRIVER_CONFIGS=\"CONFIG_USB_SERIAL=m/DRIVER_CONFIGS=\"CONFIG_USB=m CONFIG_USB_SERIAL=m/" "$t" > drivers/usb-serial/manifest.sh && DRY_RUN=1 ./2_build_modules.sh build; echo "exit=$?"; cp "$t" drivers/usb-serial/manifest.sh'
 ```
-Expected: `CONFIG conflict on CONFIG_USB: 'dvb' declares CONFIG_USB=y, 'usb-serial' declares CONFIG_USB=m`, non-zero exit, and the manifest restored.
+Expected: `CONFIG conflict on CONFIG_USB: 'dvb' declares CONFIG_USB=y, 'usb-serial' declares CONFIG_USB=m`, non-zero exit, and the manifest restored (`git diff --stat` clean).
 
 - [ ] **Step 14: Test a serial-only build (the `DRIVER_REQUIRES` / no-DVB path)**
 
-Run: `DRY_RUN=1 DRIVERS="usb-serial" ./2_build_modules.sh build 2>&1 | head -30`
-Expected: only `usb-serial` listed; 5 CONFIG tokens; `make ARCH=x86_64 M=drivers/usb/serial`. This proves a driver does not depend on DVB being enabled.
+```sh
+set_drivers "usb-serial"
+DRY_RUN=1 ./2_build_modules.sh build 2>&1 | head -30
+set_drivers "dvb usb-serial"
+rm -f .env
+```
+
+Expected: only `usb-serial` listed; 5 CONFIG tokens; `make ARCH=x86_64 M=drivers/usb/serial`. This proves a driver does not depend on DVB being enabled. The last line removes the test `.env` — the checkout must be back to its starting state before the commit in step 16.
 
 - [ ] **Step 15: Syntax-check, secrets check**
 
-Run:
 ```sh
-bash -n 2_build_modules.sh && sh -n docker_entrypoint.sh 0_prepare.sh && sh scripts/verify-module-list.sh >/dev/null && sh scripts/check-secrets.sh
+test ! -f .env || { echo "ERROR: test .env left behind — rm -f .env" >&2; exit 1; }
+bash -n 2_build_modules.sh 0_prepare.sh && sh -n docker_entrypoint.sh \
+  && sh scripts/verify-module-list.sh >/dev/null && sh scripts/check-secrets.sh
 ```
-Expected: `OK: nothing publishable in ...`.
+
+`0_prepare.sh` is a bash script (its env block uses `$'…'`), so it gets `bash -n`, not `sh -n`. Expected: `OK: nothing publishable in ...`. The first line is a guard, not a formality: a `.env` left in the tree is the invariant-2 hazard described in step 10.
 
 - [ ] **Step 16: Commit**
 
 ```bash
-git add -A 2_build_dvb.sh 2_build_modules.sh Dockerfile Dockerfile.dvb apply_patches.py docker_entrypoint.sh 0_prepare.sh
+git add -A
+git status --short
 git commit -m "feat: driver-driven build; drop the DVB literals from the builder
 
 2_build_modules.sh resolves DRIVERS through scripts/lib-drivers.sh, merges
